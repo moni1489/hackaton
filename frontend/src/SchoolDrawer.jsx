@@ -3,10 +3,10 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { LatencyChart, SpeedChart } from './Charts';
 import {
-  IcoBrain, IcoClose, IcoDoc, IcoDown, IcoPc, IcoSpark, IcoTrend,
+  IcoBrain, IcoClose, IcoDoc, IcoDown, IcoSpark,
 } from './icons';
 import {
-  Bar, Metric, Pair, RISK_CLASS, Section, StatusCell, Tag,
+  Bar, Metric, Pair, RISK_CLASS, Section, Tag,
   deviceMeta, fmtAgo, fmtDateTime, statusMeta,
 } from './ui';
 

@@ -205,7 +205,7 @@ a { color: inherit; text-decoration: none; }
 /* ---------- Полоса KPI ------------------------------------ */
 .kpi-strip { display: flex; background: var(--surface); border-bottom: 1px solid var(--line); flex: 0 0 auto; }
 .kpi {
-  flex: 1; padding: 15px 22px 17px; border-right: 1px solid var(--line);
+  flex: 1; padding: 15px 22px 26px; border-right: 1px solid var(--line);
   position: relative; overflow: hidden; min-width: 0;
 }
 .kpi:last-child { border-right: none; }
@@ -217,12 +217,12 @@ a { color: inherit; text-decoration: none; }
 .delta.up { background: var(--ok-soft); color: var(--ok); }
 .delta.down { background: var(--danger-soft); color: var(--danger); }
 .delta.flat { background: var(--surface-3); color: var(--ink-3); }
-.kpi-spark { position: absolute; left: 0; right: 0; bottom: 0; height: 34px; opacity: .5; pointer-events: none; }
+.kpi-spark { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; opacity: .32; pointer-events: none; }
 
 /* ---------- Рабочая область ------------------------------- */
 .work { flex: 1; display: flex; min-height: 0; }
 .stage { flex: 1; position: relative; min-width: 0; background: var(--surface-3); }
-.map-root { position: absolute; inset: 0; }
+.map-root { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 .float { position: absolute; z-index: 5; }
 .float.tl { top: 18px; left: 18px; }

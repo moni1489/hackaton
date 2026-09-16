@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { IcoDoc, IcoPc, IcoQueue, IcoRefresh, IcoSchool, IcoShield, IcoUsers } from './icons';
 import {
-  Bar, Pair, Section, StatusCell, Tag, deviceMeta, fmtAgo, fmtDateTime, fmtInterval,
+  Pair, Section, StatusCell, Tag, deviceMeta, fmtDateTime, fmtInterval,
 } from './ui';
 
 /* ---------- Школы ------------------------------------------------- */
