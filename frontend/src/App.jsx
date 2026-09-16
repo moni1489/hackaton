@@ -327,6 +327,32 @@ export default function App() {
           </div>
         </div>
 
+
+        {/* МЕТРИКИ ПО РЕГИОНУ */}
+        <div style={{
+          background: '#13243A',
+          border: '1px solid #1E3A56',
+          borderRadius: 10,
+          padding: '0.85rem 1rem',
+          marginBottom: '1.25rem',
+        }}>
+          <div style={{
+            fontSize: '0.72rem',
+            color: '#7B95B4',
+            textTransform: 'uppercase',
+            letterSpacing: '0.07em',
+            fontWeight: 700,
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}>
+            Аналитика качества связи по ВКО
+            <span style={{ flex: 1, height: 1, background: '#1E3A56', display: 'block' }} />
+          </div>
+          <RegionalMetrics schools={schools} />
+        </div>
+
         {/* КАРТА + ПРАВАЯ КОЛОНКА */}
         <div className="content-grid">
 
@@ -501,7 +527,10 @@ export default function App() {
               </div>
 
               {/* Устройства */}
-              <div className="section-title">Точки мониторинга в здании школы ({schoolModal.devices?.length} устройств)</div>
+              <div className="section-title">Графики метрик качества связи</div>
+              <SchoolMetricsChart measurements={schoolMeasurements} />
+
+              <div className="section-title" style={{ marginTop: '1.25rem' }}>Точки мониторинга в здании школы ({schoolModal.devices?.length} устройств)</div>
               <div className="data-table-wrap">
                 <table className="data-table">
                   <thead>
