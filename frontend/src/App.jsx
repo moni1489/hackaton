@@ -10,9 +10,8 @@ import Rail from './Rail';
 import SchoolDrawer from './SchoolDrawer';
 import {
   IcoAlert, IcoBell, IcoCal, IcoChevron, IcoClock, IcoDown, IcoGear, IcoLayers,
-  IcoLogout, IcoMap, IcoPc, IcoPulse, IcoSchool, IcoSearch, IcoShield,
+  IcoLogout, IcoMap, IcoPc, IcoPulse, IcoSchool, IcoSearch,
 } from './icons';
-import { Bar, Tag } from './ui';
 
 const NAV = [
   { key: 'map', label: 'Карта области', Icon: IcoMap },
@@ -61,6 +60,7 @@ function Dashboard({ user, onLogout }) {
   const [search, setSearch] = useState('');
   const [mapMode, setMapMode] = useState('heat');
   const [slaLayer, setSlaLayer] = useState(false);
+  const [mapCollapsed, setMapCollapsed] = useState(false);
 
   const [selectedId, setSelectedId] = useState(null);
   const [schoolDrawer, setSchoolDrawer] = useState(null);
@@ -208,6 +208,13 @@ function Dashboard({ user, onLogout }) {
               <button className={`pill-toggle ${slaLayer ? 'on' : ''}`}
                 onClick={() => { setSlaLayer(!slaLayer); setStatus(slaLayer ? 'Все статусы' : 'Нестабильно'); }}>
                 <IcoPulse size={15} />SLA-фокус
+              </button>
+
+              <button className={`pill-toggle ${mapCollapsed ? 'on' : ''}`}
+                onClick={() => setMapCollapsed((v) => !v)}
+                title={mapCollapsed ? 'Показать карту' : 'Свернуть карту'}>
+                <IcoChevron style={{ transform: `rotate(${mapCollapsed ? -90 : 90}deg)` }} />
+                {mapCollapsed ? 'Показать карту' : 'Свернуть карту'}
               </button>
 
               <div className="tool-right">
