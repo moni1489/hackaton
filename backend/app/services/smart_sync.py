@@ -25,11 +25,24 @@ _workers: list[asyncio.Task] = []
 _stats = {"enqueued": 0, "processed": 0, "failed": 0, "rows": 0, "rejected": 0}
 
 
-def stats() -> dict:
-    return {**_stats,
+def stats(db=None) -> dict:
+    """Метрики очереди. Счётчики процесса дополняются историей из БД,
+    чтобы после перезапуска сервиса панель не показывала нули."""
+    data = {**_stats,
             "queue_depth": _queue.qsize() if _queue else 0,
             "workers": len(_workers),
             "broker": "celery" if settings.CELERY_BROKER_URL else "in-process asyncio"}
+    if db is not None:
+        from sqlalchemy import func
+        from ..models import SyncBatch
+        done = db.query(func.count(SyncBatch.id), func.coalesce(func.sum(SyncBatch.items), 0)) \
+                 .filter(SyncBatch.status == "done").one()
+        data["processed"] = max(data["processed"], done[0] or 0)
+        data["rows"] = max(data["rows"], int(done[1] or 0))
+        data["failed"] = max(data["failed"],
+                             db.query(func.count(SyncBatch.id))
+                               .filter(SyncBatch.status == "failed").scalar() or 0)
+    return data
 
 
 async def start_workers() -> None:

@@ -37,9 +37,12 @@ export default function Login({ onSuccess }) {
           <img src="/logos/oskemen.png" alt="Oskemen Hub" />
           <img src="/logos/uct.png" alt="Цифровой ВКО" />
         </div>
-        <h2>Вход в систему</h2>
-        <p>Автономный мониторинг качества интернет-соединения организаций образования
-           Восточно-Казахстанской области.</p>
+        <div className="eyebrow" style={{ textAlign: 'center' }}>
+          Система автономного мониторинга · ВКО
+        </div>
+        <h2 style={{ textAlign: 'center' }}>Вход в систему</h2>
+        <p style={{ textAlign: 'center' }}>Контроль качества интернет-соединения организаций
+           образования Восточно-Казахстанской области.</p>
 
         {error ? <div className="login-error">{error}</div> : null}
 
@@ -61,7 +64,7 @@ export default function Login({ onSuccess }) {
 
         <div className="demo-list">
           <div className="eyebrow" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <IcoShield size={13} />Демо-доступы · разные роли видят разные данные
+            <IcoShield size={13} />Демо-доступы · роли и области видимости
           </div>
           {DEMO.map((account) => (
             <button type="button" key={account.email} className="demo-btn"

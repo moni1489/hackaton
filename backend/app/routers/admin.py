@@ -64,7 +64,7 @@ def set_mode(device_id: str, mode: str, request: Request, db: Session = Depends(
 def sync_monitor(limit: int = 20, db: Session = Depends(get_db),
                  user: User = Depends(require_roles("admin", "operator"))):
     rows = db.query(SyncBatch).order_by(SyncBatch.id.desc()).limit(limit).all()
-    return {"queue": sync_stats(),
+    return {"queue": sync_stats(db),
             "recent": [{"id": b.id, "device_id": b.device_id, "items": b.items,
                         "status": b.status, "received_at": b.received_at,
                         "processed_at": b.processed_at, "error": b.error} for b in rows]}

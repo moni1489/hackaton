@@ -371,7 +371,7 @@ def system_state(db: Session = Depends(get_db), user: User = Depends(current_use
                      "devices": db.query(func.count(Device.id)).scalar(),
                      "measurements": db.query(func.count(Measurement.id)).scalar()},
         "cache": {"backend": backend_name(), "ttl_sec": settings.CACHE_TTL},
-        "smart_sync": sync_stats(),
+        "smart_sync": sync_stats(db),
         "audit": verify_audit_chain(db) if user.role == "admin" else {"valid": None},
         "security": {"mtls_required": settings.REQUIRE_MTLS,
                      "device_auth": "JWT + hardware fingerprint",

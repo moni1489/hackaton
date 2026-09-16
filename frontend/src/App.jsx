@@ -113,7 +113,7 @@ function Dashboard({ user, onLogout }) {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
-            <img src="/logos/uct.png" alt="Цифровой ВКО" />
+            <img src="/logos/akimat.png" alt="Акимат ВКО" />
           </div>
           <div className="brand-text">
             <div className="brand-name">САМ ВКО</div>
