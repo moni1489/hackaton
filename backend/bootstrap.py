@@ -118,6 +118,12 @@ def seed_measurements(db, devices: list[Device], days: int = 21, per_day: int = 
         return
 
     schools = {s.id: s for s in db.query(School).all()}
+    school_grades = {}
+    for school_id in schools:
+        roll = random.random()
+        school_grades[school_id] = (random.uniform(0.1, 0.4) if roll < 0.09      # аварийные
+                                    else random.uniform(0.34, 0.72) if roll < 0.26  # проблемные
+                                    else random.uniform(0.82, 1.05))               # штатные
     now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
     rows, device_state = [], {}
 
@@ -125,15 +131,18 @@ def seed_measurements(db, devices: list[Device], days: int = 21, per_day: int = 
         school = schools[device.school_id]
         contract = school.contract_speed_down or 100.0
         # базовое качество линии конкретного ПК
-        base_ratio = {"Шлюз": 0.92}.get(device.device_type, random.uniform(0.55, 0.95))
+        # Качество линии школы в целом: у ~22% организаций канал объективно слабый.
+        school_grade = school_grades[device.school_id]
+        base_ratio = school_grade * (1.0 if device.device_type == "Шлюз"
+                                     else random.uniform(0.86, 1.0))
         if "Wi-Fi" in (device.link_mode or ""):
-            base_ratio *= random.uniform(0.55, 0.8)
+            base_ratio *= random.uniform(0.72, 0.9)
         if device.link_mode == "Ethernet 100 Мбит/с":
             base_ratio = min(base_ratio, 95 / contract)
 
-        bad_weekday = random.choice([0, 1, 2, 3, 4]) if random.random() < 0.35 else None
-        busy_hour = random.choice([10, 11, 12]) if random.random() < 0.45 else None
-        flaky = random.random() < 0.12
+        bad_weekday = random.choice([0, 1, 2, 3, 4]) if random.random() < 0.3 else None
+        busy_hour = random.choice([10, 11, 12]) if random.random() < 0.4 else None
+        flaky = school_grade < 0.5 and random.random() < 0.4
 
         samples = []
         for day in range(days, -1, -1):
@@ -144,7 +153,7 @@ def seed_measurements(db, devices: list[Device], days: int = 21, per_day: int = 
                     ratio *= random.uniform(0.45, 0.65)      # недельный паттерн
                 if busy_hour is not None and ts.hour in (busy_hour, busy_hour + 1):
                     ratio *= random.uniform(0.5, 0.7)        # часы пиковой нагрузки
-                offline = flaky and random.random() < 0.05
+                offline = flaky and random.random() < 0.06
 
                 down = 0.0 if offline else round(max(0.5, contract * ratio), 1)
                 up = 0.0 if offline else round(down * random.uniform(0.45, 0.95), 1)
@@ -158,6 +167,11 @@ def seed_measurements(db, devices: list[Device], days: int = 21, per_day: int = 
                                 "ping": ping, "jitter": jitter, "packet_loss": loss,
                                 "is_offline": offline,
                                 "source": "backfill" if offline or random.random() < 0.04 else "live"})
+        # Школы в состоянии активной аварии: последние замеры всех ПК — «нет связи».
+        if school_grade < 0.3:
+            for sample in samples[-2:]:
+                sample.update(download_speed=0.0, upload_speed=0.0, ping=0.0,
+                              jitter=0.0, packet_loss=100.0, is_offline=True)
         rows.extend(samples)
         device_state[device.device_id] = samples[-1]
 
@@ -207,10 +221,11 @@ def recompute_schools(db) -> None:
             sum(d.current_packet_loss or 0 for d in devices) / len(devices), 2)
         school.last_measurement = max((d.last_seen for d in devices if d.last_seen),
                                       default=datetime.utcnow())
-        statuses = [classify(d.current_download or 0, d.current_ping or 0,
-                             d.current_packet_loss or 0, school.contract_speed_down,
-                             d.status == "offline") for d in devices]
-        school.status = max(statuses, key=lambda s: order[s])
+        # Статус организации — по усреднённому каналу; проблемы отдельного ПК
+        # видны на ПК-уровне и не «красят» всю школу.
+        school.status = classify(school.current_download, school.current_ping,
+                                 school.current_packet_loss, school.contract_speed_down,
+                                 all(d.status == "offline" for d in devices))
     db.commit()
     print("  статусы школ пересчитаны по ПК-агентам")
 
@@ -243,11 +258,25 @@ def refresh_incidents(db) -> None:
     print(f"  инцидентов создано: {created}")
 
 
+def reset_history(db) -> None:
+    """Удаляет сгенерированную историю ПК-агентов (для повторного наполнения)."""
+    deleted = db.query(Measurement).filter(Measurement.device_id.like("PC-%")).delete(
+        synchronize_session=False)
+    db.query(Incident).filter(Incident.incident_number.like("INC-2026-%")).delete(
+        synchronize_session=False)
+    db.commit()
+    print(f"  удалено замеров: {deleted}")
+
+
 def main() -> None:
+    import sys
     print("Миграция схемы:")
     migrate_schema()
     db = SessionLocal()
     try:
+        if "--reset" in sys.argv:
+            print("Сброс истории:")
+            reset_history(db)
         print("Учётные записи:")
         seed_users(db)
         print("ПК-агенты:")

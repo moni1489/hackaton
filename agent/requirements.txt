@@ -1,2 +1,2 @@
-requests
-speedtest-cli
+requests>=2.32
+speedtest-cli>=2.1
