@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { LatencyChart, LossChart, SpeedChart } from './Charts';
-import { IcoClose, IcoPc, IcoPulse, IcoShield, IcoSpark, IcoWifi } from './icons';
+import { IcoClose, IcoPc, IcoPulse, IcoRouter, IcoSpark, IcoWifi } from './icons';
 import { Bar, Metric, Pair, RISK_CLASS, Section, Tag, deviceMeta, fmtAgo, fmtDateTime, fmtInterval } from './ui';
 
 export default function DeviceDrawer({ deviceId, role, onClose }) {
@@ -110,7 +110,7 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
           <div className="block"><LatencyChart measurements={measurements} /></div>
           <div className="block"><LossChart measurements={measurements} /></div>
 
-          <Section title="Предиктивный анализ по этому ПК">
+          <Section title="Анализ канала этого ПК">
             <Tag kind={RISK_CLASS[analytics.risk_level] || 'off'}>
               риск {analytics.risk_score}/100 · {analytics.risk_level}
             </Tag>
@@ -161,7 +161,7 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
           <Section title="Динамическая конфигурация агента" />
           <div className="block">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-              <div className="insight-icon"><IcoShield size={17} style={{ color: 'var(--accent)' }} /></div>
+              <div className="insight-icon"><IcoRouter size={17} style={{ color: "var(--accent)" }} /></div>
               <div style={{ flex: 1, fontSize: 12.5, lineHeight: 1.5, color: 'var(--ink-2)' }}>
                 Сервер сам управляет частотой тестирования: при деградации канала интервал
                 сокращается, а агент переходит в углублённую диагностику.

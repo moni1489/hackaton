@@ -178,15 +178,34 @@ def school_measurements(school_id: int, hours: int = 720, limit: int = 500,
     since = datetime.utcnow() - timedelta(hours=hours)
     rows = (db.query(Measurement)
             .filter(Measurement.school_id == school_id, Measurement.timestamp >= since)
-            .order_by(Measurement.timestamp.asc()).limit(limit).all())
+            .order_by(Measurement.timestamp.asc()).all())
     if not rows:
         rows = (db.query(Measurement).filter(Measurement.school_id == school_id)
-                .order_by(Measurement.timestamp.asc()).limit(limit).all())
-    return [{"timestamp": m.timestamp.isoformat() if m.timestamp else None,
-             "device_id": m.device_id, "download_speed": m.download_speed,
-             "upload_speed": m.upload_speed, "ping": m.ping, "jitter": m.jitter,
-             "packet_loss": m.packet_loss, "is_offline": m.is_offline,
-             "source": m.source} for m in rows]
+                .order_by(Measurement.timestamp.asc()).all())
+
+    # В школе несколько ПК-агентов: для графика организации усредняем их замеры
+    # по часовым интервалам, иначе линия превращается в «пилу» из разных ПК.
+    buckets: dict[datetime, list[Measurement]] = {}
+    for row in rows:
+        if not row.timestamp:
+            continue
+        buckets.setdefault(row.timestamp.replace(minute=0, second=0, microsecond=0), []).append(row)
+
+    def mean(items, attr):
+        values = [getattr(i, attr) or 0 for i in items]
+        return round(sum(values) / len(values), 1) if values else 0.0
+
+    series = [{"timestamp": key.isoformat(),
+               "devices": len({i.device_id for i in items}),
+               "download_speed": mean(items, "download_speed"),
+               "upload_speed": mean(items, "upload_speed"),
+               "ping": mean(items, "ping"),
+               "jitter": mean(items, "jitter"),
+               "packet_loss": round(mean(items, "packet_loss"), 2),
+               "is_offline": all(i.is_offline for i in items),
+               "source": "backfill" if any(i.source == "backfill" for i in items) else "live"}
+              for key, items in sorted(buckets.items())]
+    return series[-limit:]
 
 
 # --- ПК-уровень прослеживания ---------------------------------------------

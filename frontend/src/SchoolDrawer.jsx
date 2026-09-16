@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { LatencyChart, SpeedChart } from './Charts';
 import {
-  IcoBrain, IcoClose, IcoDoc, IcoDown, IcoSpark,
+  IcoClose, IcoDoc, IcoDown, IcoSpark, IcoTrend,
 } from './icons';
 import {
   Bar, Metric, Pair, RISK_CLASS, Section, Tag,
@@ -147,16 +147,16 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
 
           {analytics ? (
             <>
-              <Section title="Предиктивная аналитика SLA">
+              <Section title="Анализ соответствия SLA">
                 <Tag kind={RISK_CLASS[analytics.risk_level] || 'off'}>
                   риск {analytics.risk_score}/100 · {analytics.risk_level}
                 </Tag>
               </Section>
               <div className="block">
                 <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
-                  <div className="insight-icon"><IcoBrain size={17} style={{ color: 'var(--violet)' }} /></div>
+                  <div className="insight-icon"><IcoTrend size={17} style={{ color: "var(--violet)" }} /></div>
                   <div style={{ flex: 1 }}>
-                    <div className="eyebrow">Прогноз системы</div>
+                    <div className="eyebrow">Оценка по истории замеров</div>
                     <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.55 }}>
                       {analytics.forecast}
                     </p>

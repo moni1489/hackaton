@@ -9,7 +9,7 @@ import { AdminPage, DevicesPage, IncidentsPage, SchoolsPage } from './Pages';
 import Rail from './Rail';
 import SchoolDrawer from './SchoolDrawer';
 import {
-  IcoAlert, IcoBell, IcoCal, IcoChevron, IcoClock, IcoDown, IcoGear, IcoLayers, IcoLeaf,
+  IcoAlert, IcoBell, IcoCal, IcoChevron, IcoClock, IcoDown, IcoGear, IcoLayers,
   IcoLogout, IcoMap, IcoPc, IcoPulse, IcoSchool, IcoSearch, IcoShield,
 } from './icons';
 import { Bar, Tag } from './ui';
@@ -112,7 +112,9 @@ function Dashboard({ user, onLogout }) {
       {/* ---------- Боковая навигация ---------- */}
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark"><IcoLeaf /></div>
+          <div className="brand-mark">
+            <img src="/logos/uct.png" alt="Цифровой ВКО" />
+          </div>
           <div className="brand-text">
             <div className="brand-name">САМ ВКО</div>
             <div className="brand-sub">МОНИТОРИНГ СВЯЗИ</div>
@@ -131,6 +133,11 @@ function Dashboard({ user, onLogout }) {
         </nav>
 
         <div className="sidebar-foot">
+          <div className="partner-logos">
+            <img src="/logos/akimat.png" alt="Акимат ВКО" title="Акимат ВКО" />
+            <img src="/logos/oskemen.png" alt="Oskemen Hub" title="Oskemen Hub" />
+            <img src="/logos/uct.png" alt="Цифровой ВКО" title="Цифровой ВКО" />
+          </div>
           <div className="user-chip">
             <div className="avatar">{(user?.full_name || '?').trim()[0]}</div>
             <div className="user-meta">

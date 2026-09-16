@@ -1,7 +1,7 @@
 /* Вход в веб-панель. Демо-роли показывают работу RBAC-изоляции. */
 import { useState } from 'react';
 import { api } from './api';
-import { IcoLeaf, IcoShield } from './icons';
+import { IcoShield } from './icons';
 
 const DEMO = [
   { email: 'admin@vko.edu.kz', password: 'admin123', title: 'Администратор УО', role: 'admin' },
@@ -32,12 +32,10 @@ export default function Login({ onSuccess }) {
   return (
     <div className="login-screen">
       <form className="login-card" onSubmit={submit}>
-        <div className="brand" style={{ padding: 0 }}>
-          <div className="brand-mark"><IcoLeaf /></div>
-          <div>
-            <div className="brand-name">САМ ВКО</div>
-            <div className="brand-sub">МОНИТОРИНГ СВЯЗИ</div>
-          </div>
+        <div className="partner-logos lg">
+          <img src="/logos/akimat.png" alt="Акимат ВКО" />
+          <img src="/logos/oskemen.png" alt="Oskemen Hub" />
+          <img src="/logos/uct.png" alt="Цифровой ВКО" />
         </div>
         <h2>Вход в систему</h2>
         <p>Автономный мониторинг качества интернет-соединения организаций образования

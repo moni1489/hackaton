@@ -2,20 +2,20 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import {
-  IcoAlert, IcoBrain, IcoLeaf, IcoPc, IcoPulse, IcoRefresh, IcoShield, IcoSpark, IcoTrend,
+  IcoAlert, IcoDown, IcoGauge, IcoPc, IcoPulse, IcoRefresh, IcoShield, IcoSpark, IcoTrend,
 } from './icons';
 import { Bar, RISK_CLASS, Tag, deviceMeta, fmtAgo } from './ui';
 
 const TABS = [
   { key: 'insights', label: 'Инсайты', Icon: IcoSpark },
-  { key: 'ml', label: 'ML', Icon: IcoBrain },
+  { key: 'risk', label: 'Риски', Icon: IcoGauge },
   { key: 'incidents', label: 'Инциденты', Icon: IcoAlert },
   { key: 'devices', label: 'ПК', Icon: IcoPc },
 ];
 
 const HEADS = {
   insights: { title: 'Сводка по состоянию сети', Icon: IcoPulse },
-  ml: { title: 'ML-анализ рисков SLA', Icon: IcoBrain },
+  risk: { title: 'Рейтинг риска нарушения SLA', Icon: IcoGauge },
   incidents: { title: 'Активные инциденты', Icon: IcoAlert },
   devices: { title: 'ПК-агенты с отклонениями', Icon: IcoPc },
 };
@@ -66,11 +66,11 @@ export default function Rail({ overview, incidents, schools, onOpenSchool, onOpe
             onOpenSchool={onOpenSchool} />
         ) : null}
 
-        {tab === 'ml' ? (
+        {tab === 'risk' ? (
           risks.length ? risks.map((risk) => (
             <button key={risk.school_id} className={`insight ${RISK_CLASS[risk.risk_level] === 'ok' ? '' : RISK_CLASS[risk.risk_level]}`}
               onClick={() => onOpenSchool(risk.school_id)} style={{ width: '100%', textAlign: 'left' }}>
-              <div className="insight-icon"><IcoBrain size={17} style={{ color: 'var(--violet)' }} /></div>
+              <div className="insight-icon"><IcoGauge size={17} style={{ color: 'var(--violet)' }} /></div>
               <div className="insight-body">
                 <Tag kind={RISK_CLASS[risk.risk_level] || 'off'}>риск {risk.risk_level}</Tag>
                 <div className="insight-title sm">{risk.school_name}</div>
@@ -192,7 +192,7 @@ function Insights({ overview, counts, risks, schools, onOpenSchool }) {
       {worst ? (
         <button className="insight danger" style={{ width: '100%', textAlign: 'left' }}
           onClick={() => onOpenSchool(worst.school_id)}>
-          <div className="insight-icon"><IcoBrain size={17} style={{ color: 'var(--danger)' }} /></div>
+          <div className="insight-icon"><IcoAlert size={17} style={{ color: "var(--danger)" }} /></div>
           <div className="insight-body">
             <Tag kind="danger">Приоритет вмешательства</Tag>
             <div className="insight-title sm">{worst.school_name}</div>
@@ -208,7 +208,7 @@ function Insights({ overview, counts, risks, schools, onOpenSchool }) {
       {slowest ? (
         <button className="insight warn" style={{ width: '100%', textAlign: 'left' }}
           onClick={() => onOpenSchool(slowest.id)}>
-          <div className="insight-icon"><IcoLeaf size={17} style={{ color: 'var(--warn)' }} /></div>
+          <div className="insight-icon"><IcoDown size={17} style={{ color: "var(--warn)" }} /></div>
           <div className="insight-body">
             <Tag kind="warn">Наибольшее отставание от договора</Tag>
             <div className="insight-title sm">{slowest.name}</div>
