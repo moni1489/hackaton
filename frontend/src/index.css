@@ -233,6 +233,14 @@ a { color: inherit; text-decoration: none; }
 .stage { flex: 1; position: relative; min-width: 0; background: var(--surface-3); }
 .map-root { position: absolute; inset: 0; width: 100%; height: 100%; }
 
+/* Свёрнутая карта: Mapbox размонтирован, вместо него — компактная плашка разворота */
+.stage-collapsed {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+}
+.stage-collapsed p { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-3); }
+.stage-collapsed .btn { flex: none; padding: 11px 20px; }
+
 .float { position: absolute; z-index: 5; }
 .float.tl { top: 18px; left: 18px; }
 .float.bl { bottom: 18px; left: 18px; }
@@ -282,12 +290,12 @@ a { color: inherit; text-decoration: none; }
   background: rgba(20, 24, 31, .93); backdrop-filter: blur(10px); color: #fff;
   border-radius: var(--r-lg); padding: 13px 15px; width: 218px;
 }
-.legend-card .eyebrow { color: rgba(255,255,255,.55); }
-.legend-gradient {
-  height: 8px; border-radius: 99px; margin: 10px 0 7px;
-  background: linear-gradient(90deg, #17A65B, #8FCB3F, #E4962A, #E0453E);
+.legend-card .eyebrow { color: rgba(255,255,255,.55); margin-bottom: 9px; }
+.legend-row {
+  display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600;
+  padding: 4px 0; color: rgba(255,255,255,.88);
 }
-.legend-ends { display: flex; justify-content: space-between; font-size: 10px; color: rgba(255,255,255,.62); font-weight: 600; }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
 
 .fab {
   display: flex; align-items: center; gap: 10px; background: var(--dark); color: #fff;

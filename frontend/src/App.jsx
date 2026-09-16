@@ -12,6 +12,7 @@ import {
   IcoAlert, IcoBell, IcoCal, IcoChevron, IcoClock, IcoDown, IcoGear, IcoLayers,
   IcoLogout, IcoMap, IcoPc, IcoPulse, IcoSchool, IcoSearch,
 } from './icons';
+import { STATUS } from './ui';
 
 const NAV = [
   { key: 'map', label: 'Карта области', Icon: IcoMap },
@@ -58,7 +59,7 @@ function Dashboard({ user, onLogout }) {
   const [provider, setProvider] = useState('Все провайдеры');
   const [status, setStatus] = useState('Все статусы');
   const [search, setSearch] = useState('');
-  const [mapMode, setMapMode] = useState('heat');
+  const [mapMode, setMapMode] = useState('points');
   const [slaLayer, setSlaLayer] = useState(false);
   const [mapCollapsed, setMapCollapsed] = useState(false);
 
@@ -199,7 +200,7 @@ function Dashboard({ user, onLogout }) {
               <span className="vdiv" />
 
               <div className="segmented">
-                {[['heat', 'Хитмап'], ['points', 'Точки'], ['satellite', 'Спутник']].map(([key, label]) => (
+                {[['points', 'Точки'], ['satellite', 'Спутник']].map(([key, label]) => (
                   <button key={key} className={mapMode === key ? 'active' : ''}
                     onClick={() => setMapMode(key)}>{label}</button>
                 ))}
@@ -272,51 +273,40 @@ function Dashboard({ user, onLogout }) {
 
             <div className="work">
               <div className="stage">
-                <MapView schools={schools} mode={mapMode} selectedId={selectedId}
-                  onSelect={setSelectedId} onOpenSchool={openSchool} />
-
-                <div className="float tl panel-card">
-                  <div className="panel-card-head">
-                    <IcoShield size={17} style={{ color: 'var(--accent)' }} />
-                    <h4>ОБЩИЙ СТАТУС СЕТИ</h4>
-                    <Tag kind={healthy >= 70 ? 'ok' : healthy >= 45 ? 'warn' : 'danger'} className="tag ml">
-                      {healthy >= 70 ? 'Стабильно' : healthy >= 45 ? 'Внимание' : 'Напряжённо'}
-                    </Tag>
+                {mapCollapsed ? (
+                  // Карта по-настоящему свёрнута: Mapbox размонтирован (не рендерится
+                  // и не тратит ресурсы), вместо него — компактная плашка разворота.
+                  <div className="stage-collapsed">
+                    <IcoMap size={26} style={{ color: 'var(--ink-3)' }} />
+                    <p>Карта свёрнута</p>
+                    <button className="btn accent" onClick={() => setMapCollapsed(false)}>
+                      Показать карту
+                    </button>
                   </div>
-                  <div className="duo">
-                    <div>
-                      <div className="eyebrow">Доступность</div>
-                      <div className="v">{healthy}%</div>
+                ) : (
+                  <>
+                    <MapView schools={schools} mode={mapMode} selectedId={selectedId}
+                      onSelect={setSelectedId} onOpenSchool={openSchool} />
+
+                    <div className="float bl legend-card">
+                      <div className="eyebrow">Статус канала</div>
+                      {Object.entries(STATUS).map(([label, meta]) => (
+                        <div className="legend-row" key={label}>
+                          <span className="legend-dot" style={{ background: meta.color }} />
+                          {label}
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <div className="eyebrow">Соответствие SLA</div>
-                      <div className="v word" style={{
-                        color: (overview?.sla_compliance ?? 0) >= 70 ? 'var(--ok)' : 'var(--warn)',
-                      }}>
-                        {(overview?.sla_compliance ?? 0) >= 70 ? 'Оптимально' : 'Ниже нормы'}
-                      </div>
+
+                    <div className="float bc">
+                      <button className="fab" disabled={!selected}
+                        onClick={() => selected && openSchool(selected.id)}>
+                        <IcoSchool size={16} />
+                        {selected ? `Карточка: ${selected.name.slice(0, 34)}` : 'Выберите школу на карте'}
+                      </button>
                     </div>
-                  </div>
-                  <Bar value={healthy} color={healthy >= 70 ? '#17A65B' : healthy >= 45 ? '#E4962A' : '#E0453E'} />
-                  <div className="btn-row">
-                    <button className="btn solid">Уровень школ</button>
-                    <button className="btn" onClick={() => setView('devices')}>Уровень ПК</button>
-                  </div>
-                </div>
-
-                <div className="float bl legend-card">
-                  <div className="eyebrow">Состояние канала</div>
-                  <div className="legend-gradient" />
-                  <div className="legend-ends"><span>Оптимально</span><span>Критично</span></div>
-                </div>
-
-                <div className="float bc">
-                  <button className="fab" disabled={!selected}
-                    onClick={() => selected && openSchool(selected.id)}>
-                    <IcoSchool size={16} />
-                    {selected ? `Карточка: ${selected.name.slice(0, 34)}` : 'Выберите школу на карте'}
-                  </button>
-                </div>
+                  </>
+                )}
               </div>
 
               <Rail overview={overview} incidents={incidents} schools={schools}
