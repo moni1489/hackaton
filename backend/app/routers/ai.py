@@ -9,6 +9,7 @@ from ..config import settings
 from ..database import get_db
 from ..models import Incident, School, User
 from ..security import can_access_school, current_user, require_roles, write_audit
+from ..services.ml import attribution, forecast as ml_forecast
 from ..services.predictive import analyze
 from ..services.reports import sla_report
 from ..routers.web import school_brief
@@ -38,7 +39,27 @@ def _genai():
     return _model or None
 
 
-def _fallback_claim(incident: Incident, school: School, analysis: dict) -> str:
+def _verdict_block(verdict: dict | None) -> str:
+    """Заключение об источнике — то, чем претензия отличается от жалобы «медленно»."""
+    if not verdict or verdict.get("cause") in (None, "none"):
+        return ""
+    evidence = verdict.get("evidence", {})
+    return f"""
+ЗАКЛЮЧЕНИЕ ОБ ИСТОЧНИКЕ НАРУШЕНИЯ (автоматическая атрибуция):
+
+  • установленный источник — {verdict['cause_label']};
+  • зона ответственности — {verdict['responsible']};
+  • уверенность модели — {round(verdict['confidence'] * 100)}%;
+  • ПК организации в отклонении — {evidence.get('devices_affected', 0)} из {evidence.get('devices_total', 0)};
+  • школы того же провайдера в районе в отклонении — {evidence.get('peers_same_provider_district_affected', 0)} из {evidence.get('peers_same_provider_district', 0)};
+  • школы иных провайдеров в районе в отклонении — {evidence.get('peers_other_providers_district_affected_pct', 0)}%.
+
+{verdict['narrative']}
+"""
+
+
+def _fallback_claim(incident: Incident, school: School, analysis: dict,
+                    verdict: dict | None = None) -> str:
     """Детерминированный шаблон, если AI-ключ не задан — демо не ломается."""
     return f"""Руководителю {incident.provider}
 
@@ -65,7 +86,7 @@ def _fallback_claim(incident: Incident, school: School, analysis: dict) -> str:
 
 Выявленные повторяющиеся паттерны деградации:
 {chr(10).join('  • ' + p['text'] for p in analysis['patterns']) or '  • устойчивых паттернов не выявлено'}
-
+{_verdict_block(verdict)}
 На основании изложенного и в соответствии с Законом Республики Казахстан «О связи»,
 Правилами оказания услуг связи и условиями заключённого договора ТРЕБУЕМ:
 
@@ -95,6 +116,7 @@ def generate_claim(incident_id: int, request: Request, db: Session = Depends(get
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа к инциденту")
 
     analysis = analyze(db, school.id, days=30)
+    verdict = attribution.diagnose_incident(db, incident)
     model = _genai()
     source = "gemini"
 
@@ -112,23 +134,42 @@ def generate_claim(incident_id: int, request: Request, db: Session = Depends(get
 - Повторяющиеся паттерны: {'; '.join(p['text'] for p in analysis['patterns']) or 'не выявлены'}
 - Ответственное лицо: {school.contact_name}, {school.contact_phone}
 
+ЗАКЛЮЧЕНИЕ СИСТЕМЫ ОБ ИСТОЧНИКЕ НАРУШЕНИЯ (использовать как ключевой аргумент,
+изложить дословно по смыслу, не смягчать):
+{verdict.get('narrative', 'источник не установлен')}
+Установленный источник: {verdict.get('cause_label', '—')}.
+Зона ответственности: {verdict.get('responsible', '—')}.
+
 Структура: шапка (кому/от кого), исходящий номер и дата, ссылки на договор и
-законодательство РК о связи, таблица зафиксированных отклонений, требование устранить
-в срок не более 4 часов, требование перерасчёта, предупреждение о жалобе в Инспекцию
-связи МЦРИАП РК. Стиль строго официальный, готовый к подписанию. Язык — русский."""
+законодательство РК о связи, таблица зафиксированных отклонений, отдельный раздел
+«Заключение об источнике нарушения» с доводом о границе зоны отказа, требование
+устранить в срок не более 4 часов, требование перерасчёта, предупреждение о жалобе
+в Инспекцию связи МЦРИАП РК. Стиль строго официальный, готовый к подписанию.
+Язык — русский."""
         try:
             claim_text = model.generate_content(prompt).text
         except Exception as exc:  # noqa: BLE001
             log.warning("Ошибка Gemini: %s", exc)
-            claim_text, source = _fallback_claim(incident, school, analysis), "template"
+            claim_text, source = _fallback_claim(incident, school, analysis, verdict), "template"
     else:
-        claim_text, source = _fallback_claim(incident, school, analysis), "template"
+        claim_text, source = _fallback_claim(incident, school, analysis, verdict), "template"
 
     incident.ai_claim_text = claim_text
     db.commit()
     write_audit(db, user.email, user.role, "ai.claim_generated", incident.incident_number,
                 request.client.host if request.client else "", {"source": source})
-    return {"claim_text": claim_text, "source": source, "analysis": analysis}
+    # Если виновата сама организация, претензия провайдеру — потерянное время
+    # и репутационный риск. Система обязана предупредить об этом до отправки.
+    advised = verdict.get("cause") in ("provider_node", "regional")
+    advisory = ("Атрибуция подтверждает ответственность провайдера — претензия обоснована."
+                if advised else
+                f"ВНИМАНИЕ: установленный источник — {verdict.get('cause_label', '—')} "
+                f"(зона ответственности: {verdict.get('responsible', '—')}). Направление "
+                f"претензии провайдеру не имеет доказательной перспективы: устраните причину "
+                f"внутри периметра организации." if verdict.get("cause") != "none" else
+                "Источник нарушения не установлен — рекомендуется дождаться накопления замеров.")
+    return {"claim_text": claim_text, "source": source, "analysis": analysis,
+            "verdict": verdict, "claim_advised": advised, "advisory": advisory}
 
 
 @router.get("/sla-report/{school_id}", summary="PDF-акт о нарушении SLA",
@@ -150,11 +191,19 @@ def sla_pdf(school_id: int, days: int = 30, request: Request = None,
                  .order_by(Incident.id.desc()).limit(12).all()]
     payload = {**school_brief(school), "contact_name": school.contact_name,
                "contact_phone": school.contact_phone}
-    pdf = sla_report(analysis, payload, incidents)
+    verdict = attribution.diagnose(db, school_id)
+    prediction = ml_forecast.predict(db, school_id)
+    if prediction.get("probability") is not None:
+        verdict["forecast_text"] = (
+            f"Вероятность выхода за SLA в ближайшие {prediction['horizon_hours']} ч — "
+            f"{round(prediction['probability'] * 100)}% ({prediction['band']}). "
+            f"{prediction['recommendation']}")
+    pdf = sla_report(analysis, payload, incidents, verdict=verdict)
 
     write_audit(db, user.email, user.role, "ai.sla_report", school.school_id_code,
                 request.client.host if request and request.client else "",
-                {"days": days, "compliance": analysis["sla_compliance_pct"]})
+                {"days": days, "compliance": analysis["sla_compliance_pct"],
+                 "root_cause": verdict.get("cause")})
     filename = f"SLA_{school.school_id_code}_{datetime.now():%Y%m%d}.pdf"
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})

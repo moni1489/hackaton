@@ -10,6 +10,7 @@ from ..config import settings
 from ..database import get_db
 from ..models import Device, Incident, Measurement, School, SyncBatch, User
 from ..security import can_access_school, current_user, require_roles, verify_audit_chain, write_audit
+from ..services.ml.features import CAUSE_LABELS, CAUSE_OWNER
 from ..services.predictive import analyze, region_overview
 from ..services.smart_sync import stats as sync_stats
 from ..services.status import ALL_STATUSES
@@ -287,6 +288,11 @@ def incidents(limit: int = 100, db: Session = Depends(get_db),
              "severity": i.severity,
              "start_time": i.start_time.isoformat() if i.start_time else None,
              "description": i.description,
+             "root_cause": i.root_cause,
+             "root_cause_label": CAUSE_LABELS.get(i.root_cause or ""),
+             "responsible": CAUSE_OWNER.get(i.root_cause or ""),
+             "root_cause_confidence": i.root_cause_confidence,
+             "operator_verdict": i.operator_verdict,
              "has_claim": bool(i.ai_claim_text)} for i in rows]
 
 

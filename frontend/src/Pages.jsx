@@ -1,6 +1,7 @@
 /* Страницы-реестры: школы, ПК-агенты, инциденты, управление системой. */
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { causeUi } from './Diagnostics';
 import { IcoDoc, IcoPc, IcoQueue, IcoRefresh, IcoSchool, IcoShield, IcoUsers } from './icons';
 import {
   Pair, Section, StatusCell, Tag, deviceMeta, fmtDateTime, fmtInterval,
@@ -151,7 +152,8 @@ export function IncidentsPage({ incidents, role, onOpenSchool, onReload }) {
             <thead>
               <tr>
                 <th>Номер</th><th>Школа</th><th>Район</th><th>Поставщик</th>
-                <th>ПК-источник</th><th>Начало</th><th>Описание</th><th>Статус</th>
+                <th>Вердикт «Виновника»</th><th>ПК-источник</th><th>Начало</th>
+                <th>Описание</th><th>Статус</th>
                 {canManage ? <th>Действие</th> : null}
               </tr>
             </thead>
@@ -162,6 +164,27 @@ export function IncidentsPage({ incidents, role, onOpenSchool, onReload }) {
                   <td style={{ fontWeight: 600 }}>{incident.school_name}</td>
                   <td>{incident.region}</td>
                   <td>{incident.provider}</td>
+                  <td>
+                    {incident.root_cause ? (
+                      <span title={`Ответственность: ${incident.responsible}`}>
+                        <Tag kind={causeUi(incident.root_cause).tag}>
+                          {causeUi(incident.root_cause).short}
+                        </Tag>
+                        {incident.root_cause_confidence ? (
+                          <small style={{ marginLeft: 6, color: 'var(--ink-3)' }}>
+                            {Math.round(incident.root_cause_confidence * 100)}%
+                          </small>
+                        ) : null}
+                        {incident.operator_verdict
+                          && incident.operator_verdict !== incident.root_cause ? (
+                            <small style={{ marginLeft: 6, color: 'var(--warn)' }}
+                              title="Оператор исправил вердикт — метка пойдёт в дообучение">
+                              исправлен
+                            </small>
+                          ) : null}
+                      </span>
+                    ) : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                  </td>
                   <td>{incident.device_id ? <code>{incident.device_id}</code> : '—'}</td>
                   <td className="num" style={{ fontSize: 12 }}>{fmtDateTime(incident.start_time)}</td>
                   <td style={{ fontSize: 12, maxWidth: 320, color: 'var(--ink-2)' }}>

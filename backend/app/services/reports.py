@@ -29,7 +29,8 @@ for path, name, bold in (
         pass
 
 
-def sla_report(analysis: dict, school: dict, incidents: list[dict]) -> bytes:
+def sla_report(analysis: dict, school: dict, incidents: list[dict],
+               verdict: dict | None = None) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=18 * mm, bottomMargin=18 * mm,
                             leftMargin=18 * mm, rightMargin=18 * mm,
@@ -105,10 +106,40 @@ def sla_report(analysis: dict, school: dict, incidents: list[dict]) -> bytes:
     else:
         story.append(Paragraph("Устойчивых повторяющихся паттернов не выявлено.", body))
 
-    story += [Paragraph("4. Прогноз системы предиктивной аналитики", h2),
-              Paragraph(analysis["forecast"] or "—", body)]
+    # --- Заключение об источнике: доказательная часть претензии ----------
+    story.append(Paragraph("4. Заключение об источнике нарушения", h2))
+    if verdict and verdict.get("cause") and verdict["cause"] != "none":
+        evidence = verdict.get("evidence", {})
+        story.append(table([
+            ["Установленный источник", verdict.get("cause_label", "—")],
+            ["Зона ответственности", verdict.get("responsible", "—")],
+            ["Уверенность модели", f"{round(float(verdict.get('confidence', 0)) * 100)}%"],
+            ["ПК организации в отклонении",
+             f"{evidence.get('devices_affected', 0)} из {evidence.get('devices_total', 0)}"],
+            ["Школы того же провайдера в районе",
+             f"{evidence.get('peers_same_provider_district_affected', 0)} из "
+             f"{evidence.get('peers_same_provider_district', 0)} в отклонении"],
+            ["Школы других провайдеров в районе",
+             f"{evidence.get('peers_other_providers_district_affected_pct', 0)}% в отклонении"],
+            ["Средняя просадка к норме канала", f"{evidence.get('avg_depth_pct', 0)}%"],
+            ["Модель атрибуции", verdict.get("model_version", "—")],
+        ], [70 * mm, 104 * mm]))
+        story += [Spacer(1, 6), Paragraph(verdict.get("narrative", ""), body), Spacer(1, 4),
+                  Paragraph("Вывод получен сопоставлением показателей независимых агентов в "
+                            "разных организациях образования: граница зоны отклонения "
+                            "устанавливается по объективным данным, а не по показаниям одной "
+                            "точки измерения.", body)]
+    else:
+        story.append(Paragraph("Источник нарушения автоматической атрибуцией не установлен: "
+                               "на момент формирования акта синхронных отклонений у "
+                               "сопоставимых организаций не зафиксировано.", body))
 
-    story.append(Paragraph("5. Зарегистрированные инциденты", h2))
+    story += [Paragraph("5. Прогноз системы предиктивной аналитики", h2),
+              Paragraph(analysis["forecast"] or "—", body)]
+    if verdict and verdict.get("forecast_text"):
+        story.append(Paragraph(verdict["forecast_text"], body))
+
+    story.append(Paragraph("6. Зарегистрированные инциденты", h2))
     if incidents:
         story.append(table(
             [["Номер", "Начало", "Статус", "Описание"]] +

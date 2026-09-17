@@ -74,6 +74,20 @@ export const api = {
     request(`/api/admin/devices/${encodeURIComponent(deviceId)}/diagnostic-mode?mode=${mode}`,
       { method: 'POST' }),
   generateClaim: (incidentId) => request(`/api/ai/claim/${incidentId}`, { method: 'POST' }),
+
+  // --- «Виновник»: ML-атрибуция причины и прогноз пробоя SLA ---
+  mlBoard: (limit = 40) => request(`/api/ml/board?limit=${limit}`),
+  mlSummary: () => request('/api/ml/summary'),
+  mlAttribution: (schoolId) => request(`/api/ml/attribution/${schoolId}`),
+  mlIncident: (incidentId) => request(`/api/ml/incident/${incidentId}`),
+  mlVerdict: (incidentId, cause) =>
+    request(`/api/ml/verdict/${incidentId}?cause=${encodeURIComponent(cause)}`, { method: 'POST' }),
+  mlForecast: (limit = 12) => request(`/api/ml/forecast?limit=${limit}`),
+  mlSchoolForecast: (schoolId) => request(`/api/ml/forecast/${schoolId}`),
+  mlTimeline: (deviceId, hours = 24) =>
+    request(`/api/ml/timeline/${encodeURIComponent(deviceId)}?hours=${hours}`),
+  mlModelInfo: () => request('/api/ml/model-info'),
+  mlRetrain: () => request('/api/ml/retrain', { method: 'POST' }),
   slaReport: async (schoolId, filename) => {
     const response = await request(`/api/ai/sla-report/${schoolId}`, { raw: true });
     const url = URL.createObjectURL(await response.blob());

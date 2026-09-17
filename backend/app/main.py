@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from .cache import backend_name
 from .config import settings
 from .database import Base, engine
-from .routers import admin, agent, ai, auth, web
+from .routers import admin, agent, ai, auth, ml, web
 from .services.smart_sync import start_workers, stats, stop_workers
 
 logging.basicConfig(level=logging.INFO,
@@ -42,6 +42,8 @@ app = FastAPI(
         {"name": "Web API", "description": "Дашборд, карта, карточка школы, ПК-уровень"},
         {"name": "Admin API", "description": "Управление агентами и пользователями"},
         {"name": "Integration / AI API", "description": "Претензии и PDF-акты SLA"},
+        {"name": "ML API — «Виновник»", "description": "Атрибуция причины деградации "
+                                                       "и прогноз пробоя SLA"},
     ],
 )
 
@@ -78,6 +80,7 @@ app.include_router(agent.router)
 app.include_router(web.router)
 app.include_router(admin.router)
 app.include_router(ai.router)
+app.include_router(ml.router)
 
 
 @app.get("/", tags=["Web API"], summary="Health-check")

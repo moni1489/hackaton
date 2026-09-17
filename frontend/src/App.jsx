@@ -5,12 +5,13 @@ import { Spark } from './Charts';
 import DeviceDrawer from './DeviceDrawer';
 import Login from './Login';
 import MapView from './MapView';
+import DiagnosticsPage from './Diagnostics';
 import { AdminPage, DevicesPage, IncidentsPage, SchoolsPage } from './Pages';
 import Rail from './Rail';
 import SchoolDrawer from './SchoolDrawer';
 import {
   IcoAlert, IcoBell, IcoCal, IcoChevron, IcoClock, IcoDown, IcoGear, IcoLayers,
-  IcoLogout, IcoMap, IcoPc, IcoPulse, IcoSchool, IcoSearch,
+  IcoLogout, IcoMap, IcoNodes, IcoPc, IcoPulse, IcoSchool, IcoSearch,
 } from './icons';
 import { STATUS } from './ui';
 
@@ -18,13 +19,14 @@ const NAV = [
   { key: 'map', label: 'Карта области', Icon: IcoMap },
   { key: 'schools', label: 'Школы', Icon: IcoSchool },
   { key: 'devices', label: 'ПК-агенты', Icon: IcoPc },
+  { key: 'diagnostics', label: 'Диагностика', Icon: IcoNodes },
   { key: 'incidents', label: 'Инциденты', Icon: IcoAlert },
   { key: 'admin', label: 'Управление', Icon: IcoGear },
 ];
 
 const TITLES = {
   map: 'Мониторинг', schools: 'Школы', devices: 'ПК-агенты',
-  incidents: 'Инциденты', admin: 'Управление',
+  diagnostics: 'Диагностика · кто виноват', incidents: 'Инциденты', admin: 'Управление',
 };
 
 const ROLE_LABEL = {
@@ -317,6 +319,9 @@ function Dashboard({ user, onLogout }) {
 
         {view === 'schools' ? <SchoolsPage schools={schools} onOpenSchool={openSchool} /> : null}
         {view === 'devices' ? <DevicesPage onOpenDevice={setDeviceDrawer} /> : null}
+        {view === 'diagnostics' ? (
+          <DiagnosticsPage role={user?.role} onOpenSchool={openSchool} />
+        ) : null}
         {view === 'incidents' ? (
           <IncidentsPage incidents={incidents} role={user?.role}
             onOpenSchool={openSchool} onReload={loadCore} />

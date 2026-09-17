@@ -1,0 +1,13 @@
+{
+ "version": "20260917-1030",
+ "attribution": {
+  "samples": 1808,
+  "accuracy": 0.976,
+  "macro_f1": 0.978
+ },
+ "forecast": {
+  "samples": 770,
+  "accuracy": 0.878,
+  "macro_f1": 0.876
+ }
+}

@@ -118,6 +118,13 @@ class Incident(Base):
     ai_claim_text = Column(Text, nullable=True)
     severity = Column(String, default="major")  # minor | major | critical
 
+    # --- ML-атрибуция причины (killer feature «Виновник») -----------------
+    root_cause = Column(String, index=True)        # device | school_lan | provider_node | regional
+    root_cause_confidence = Column(Float)          # уверенность модели 0..1
+    root_cause_evidence = Column(Text)             # JSON: признаки и доказательная база
+    root_cause_model = Column(String)              # версия модели, вынесшей вердикт
+    operator_verdict = Column(String)              # подтверждение оператора — метка для дообучения
+
 
 class User(Base):
     """Учётная запись веб-панели. Роль определяет область видимости (RBAC)."""
@@ -164,3 +171,25 @@ class SyncBatch(Base):
     error = Column(Text, nullable=True)
 
     __table_args__ = (UniqueConstraint("device_id", "id", name="uq_sync_device_batch"),)
+
+
+class FaultEvent(Base):
+    """Размеченная авария: истинная причина, район поражения и интервал.
+
+    В демо наполняется симулятором отказов, в проде — подтверждёнными
+    вердиктами операторов. Это обучающая выборка для модели атрибуции.
+    """
+    __tablename__ = "fault_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cause = Column(String, index=True)   # device | school_lan | provider_node | regional
+    district = Column(String, index=True)
+    provider = Column(String, index=True)
+    school_id = Column(Integer, index=True, nullable=True)
+    device_id = Column(String, index=True, nullable=True)
+    start_time = Column(DateTime, index=True)
+    end_time = Column(DateTime, index=True)
+    severity = Column(Float)             # множитель скорости: 0.0 — полный обрыв
+    origin = Column(String, default="simulator")   # simulator | operator
+
+    __table_args__ = (Index("ix_fault_window", "start_time", "end_time"),)

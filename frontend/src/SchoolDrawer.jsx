@@ -2,8 +2,9 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { LatencyChart, SpeedChart } from './Charts';
+import { causeUi } from './Diagnostics';
 import {
-  IcoClose, IcoDoc, IcoDown, IcoSpark, IcoTrend,
+  IcoAlert, IcoClose, IcoDoc, IcoDown, IcoSpark, IcoTrend,
 } from './icons';
 import {
   Bar, Metric, Pair, RISK_CLASS, Section, Tag,
@@ -14,6 +15,8 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
   const [school, setSchool] = useState(null);
   const [measurements, setMeasurements] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [verdict, setVerdict] = useState(null);
+  const [prediction, setPrediction] = useState(null);
   const [claim, setClaim] = useState(null);
   const [claimBusy, setClaimBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -25,9 +28,11 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
       api.school(schoolId),
       api.schoolMeasurements(schoolId),
       api.schoolAnalytics(schoolId),
-    ]).then(([s, m, a]) => {
+      api.mlAttribution(schoolId).catch(() => null),
+      api.mlSchoolForecast(schoolId).catch(() => null),
+    ]).then(([s, m, a, v, f]) => {
       if (!alive) return;
-      setSchool(s); setMeasurements(m); setAnalytics(a);
+      setSchool(s); setMeasurements(m); setAnalytics(a); setVerdict(v); setPrediction(f);
     }).catch((e) => alive && setError(e.message));
     return () => { alive = false; };
   }, [schoolId]);
@@ -37,7 +42,8 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
     setClaimBusy(true);
     try {
       const data = await api.generateClaim(incident.id);
-      setClaim({ incident, text: data.claim_text, source: data.source });
+      setClaim({ incident, text: data.claim_text, source: data.source,
+        advised: data.claim_advised, advisory: data.advisory });
     } catch (e) {
       setClaim({ incident, text: `Не удалось сформировать претензию: ${e.message}` });
     }
@@ -94,8 +100,26 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                 Формирую претензию на основании зафиксированных нарушений SLA…
               </div>
             ) : (
-              <textarea className="claim-area" value={claim.text}
-                onChange={(e) => setClaim({ ...claim, text: e.target.value })} />
+              <>
+                {claim.advisory ? (
+                  <div className="insight" style={{
+                    background: claim.advised ? 'var(--ok-soft)' : 'var(--warn-soft)',
+                    cursor: 'default', marginBottom: 12,
+                  }}>
+                    <div className="insight-icon">
+                      <IcoAlert size={17} style={{
+                        color: claim.advised ? 'var(--ok)' : 'var(--warn)',
+                      }} />
+                    </div>
+                    <div className="insight-body">
+                      <div className="eyebrow">Проверка обоснованности</div>
+                      <p className="insight-note" style={{ marginTop: 5 }}>{claim.advisory}</p>
+                    </div>
+                  </div>
+                ) : null}
+                <textarea className="claim-area" value={claim.text}
+                  onChange={(e) => setClaim({ ...claim, text: e.target.value })} />
+              </>
             )}
           </div>
           <div className="drawer-foot">
@@ -144,6 +168,68 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
             <SpeedChart measurements={measurements} contract={school.contract_speed_down} />
           </div>
           <div className="block"><LatencyChart measurements={measurements} /></div>
+
+          {/* --- «Виновник»: заключение об источнике деградации --- */}
+          {verdict && !verdict.error ? (
+            <>
+              <Section title="Заключение об источнике">
+                <Tag kind={causeUi(verdict.cause).tag}>
+                  {Math.round(verdict.confidence * 100)}% уверенности
+                </Tag>
+              </Section>
+              <div className="block">
+                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                  <div className="insight-icon">
+                    {(() => { const I = causeUi(verdict.cause).Icon; return <I size={17} />; })()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div className="eyebrow">{verdict.cause_label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, margin: '4px 0 0' }}>
+                      Зона ответственности: {verdict.responsible}
+                    </div>
+                  </div>
+                  {verdict.actionable ? <Tag kind="danger">основание для претензии</Tag> : null}
+                </div>
+                <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: 'var(--ink-2)' }}>
+                  {verdict.narrative}
+                </p>
+                <div className="mini-stats" style={{ marginTop: 12 }}>
+                  <div className="mini-stat">
+                    <div className="k">ПК в отклонении</div>
+                    <div className="v">
+                      {verdict.evidence.devices_affected}/{verdict.evidence.devices_total}
+                    </div>
+                  </div>
+                  <div className="mini-stat">
+                    <div className="k">Школы провайдера в районе</div>
+                    <div className="v">
+                      {verdict.evidence.peers_same_provider_district_affected}/
+                      {verdict.evidence.peers_same_provider_district}
+                    </div>
+                  </div>
+                  <div className="mini-stat">
+                    <div className="k">Просадка к норме</div>
+                    <div className="v">{verdict.evidence.avg_depth_pct}%</div>
+                  </div>
+                  <div className="mini-stat">
+                    <div className="k">Модель</div>
+                    <div className="v" style={{ fontSize: 12 }}>{verdict.model_version}</div>
+                  </div>
+                </div>
+                {prediction && prediction.probability != null ? (
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 14,
+                    paddingTop: 12, borderTop: '1px solid var(--surface-3)' }}>
+                    <IcoAlert size={15} style={{ color: 'var(--danger)', flex: '0 0 auto' }} />
+                    <span style={{ fontSize: 12.5, flex: 1 }}>
+                      Вероятность выхода за SLA в ближайшие {prediction.horizon_hours} ч —{' '}
+                      <b>{Math.round(prediction.probability * 100)}%</b> ({prediction.band}).{' '}
+                      {prediction.recommendation}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
 
           {analytics ? (
             <>
