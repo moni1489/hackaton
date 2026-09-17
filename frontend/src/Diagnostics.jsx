@@ -140,7 +140,9 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                       </div>
 
                       {v.evidence.affected?.length ? (
-                        <Section title="Поражённые ПК">
+                        <>
+                        <Section title="Поражённые ПК" />
+                        <div style={{ overflowX: 'auto' }}>
                           <table className="grid">
                             <thead>
                               <tr><th>ПК</th><th>Кабинет</th><th>Линк</th><th>Просадка</th><th>z</th></tr>
@@ -159,7 +161,8 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                               ))}
                             </tbody>
                           </table>
-                        </Section>
+                        </div>
+                        </>
                       ) : null}
 
                       {v.drivers?.length ? (
@@ -230,22 +233,25 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                 disabled={busy} onClick={load}><IcoRefresh size={16} /></button>
             </div>
             <div style={{ padding: 14 }}>
-              <Section title="Атрибуция причины">
+              <Section title="Атрибуция причины" />
+              <div>
                 <Pair label="Версия">{attr?.version || 'не обучена'}</Pair>
                 <Pair label="Accuracy (hold-out)">{attr?.metrics?.accuracy ?? '—'}</Pair>
                 <Pair label="Macro-F1">{attr?.metrics?.macro_f1 ?? '—'}</Pair>
                 <Pair label="Обучающих примеров">{attr?.metrics?.train_samples ?? '—'}</Pair>
                 <Pair label="Классов">{attr?.classes?.length ?? '—'}</Pair>
-              </Section>
-              <Section title={`Прогноз ${fcst?.horizon_hours || 6} ч`}>
+              </div>
+              <Section title={`Прогноз ${fcst?.horizon_hours || 6} ч`} />
+              <div>
                 <Pair label="Версия">{fcst?.version || 'не обучена'}</Pair>
                 <Pair label="Accuracy (hold-out)">{fcst?.metrics?.accuracy ?? '—'}</Pair>
                 <Pair label="Macro-F1">{fcst?.metrics?.macro_f1 ?? '—'}</Pair>
                 <Pair label="Полнота по классу «пробой»">
                   {fcst?.metrics?.per_class?.breach?.recall ?? '—'}
                 </Pair>
-              </Section>
-              <Section title="Данные обучения">
+              </div>
+              <Section title="Данные обучения" />
+              <div>
                 <Pair label="Меток всего">{model?.labels?.total ?? '—'}</Pair>
                 <Pair label="От операторов">{model?.labels?.from_operators ?? '—'}</Pair>
                 <Pair label="От симулятора">{model?.labels?.from_simulator ?? '—'}</Pair>
@@ -254,7 +260,7 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                 </Pair>
                 <Pair label="Построен">{fmtDateTime(model?.baseline?.built_at)}</Pair>
                 <Pair label="Среда">{model?.runtime}</Pair>
-              </Section>
+              </div>
               {role === 'admin' ? (
                 <button className="rail-cta" disabled={busy} onClick={retrain}>
                   <IcoRefresh size={15} />
