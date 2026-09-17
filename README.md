@@ -142,19 +142,37 @@ DEBUG=false
 
 ---
 
-## 6. Трей-агент (Windows / Linux)
+## 6. Трей-агент (Windows / Linux) в системном трее
 
-> Полная документация — в ветке [`feature/tray-agent`](../../tree/feature/tray-agent/agent)
-
-Агент с графическим интерфейсом в системном трее.
-Собирается в один `.exe` (Windows) или бинарник (Linux) через PyInstaller.
+Полноценное приложение с иконкой в трее, окном статуса и диалогом подключения находится в ветке **`feature/tray-agent`**:
 
 ```bash
-# Установить и запустить напрямую (без сборки)
+# Переключение на ветку трей-агента
+git checkout feature/tray-agent
+```
+
+### Быстрый запуск агента:
+
+**На Linux:**
+```bash
 cd agent
 pip install -r requirements-tray.txt
+pip install speedtest-cli
 python tray_agent.py
+# Или сборка в один бинарник: bash build_linux.sh
 ```
+
+**На Windows:**
+```cmd
+cd agent
+pip install -r requirements-tray.txt
+pip install speedtest-cli
+python tray_agent.py
+# Или сборка в .exe: build_windows.bat
+```
+
+> Подробная инструкция по сборке, автозагрузке и настройке — в `README.md` ветки `feature/tray-agent`.
+
 
 ---
 
