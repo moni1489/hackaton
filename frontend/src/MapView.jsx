@@ -47,11 +47,11 @@ export default function MapView({ schools, mode, onOpenSchool, onSelect, selecte
   /** Кадрирование по фактическому расположению школ (с учётом плавающих карточек). */
   const fitToData = useCallback((instance, data) => {
     if (fittedRef.current || !data.features.length) return;
-    const bounds = new mapboxgl.LngLatBounds();
-    data.features.forEach((feature) => bounds.extend(feature.geometry.coordinates));
-    instance.fitBounds(bounds, {
-      padding: { top: 60, bottom: 110, left: 390, right: 70 },
-      maxZoom: 8.5, duration: 0,
+    // Жёстко ограничиваем bbox ВКО — не улетаем в Россию
+    const VKO_BOUNDS = [[78.0, 47.0], [87.5, 51.5]];
+    instance.fitBounds(VKO_BOUNDS, {
+      padding: { top: 50, bottom: 80, left: 60, right: 60 },
+      maxZoom: 8, duration: 600,
     });
     fittedRef.current = true;
   }, []);
@@ -130,8 +130,10 @@ export default function MapView({ schools, mode, onOpenSchool, onSelect, selecte
     const instance = new mapboxgl.Map({
       container: holder.current,
       style: STYLES[mode] || STYLES.points,
-      center: [82.9, 49.4],
-      zoom: 6.1,
+      center: [82.6, 49.95],   // Усть-Каменогорск — центр ВКО
+      zoom: 7.5,
+      minZoom: 5,
+      maxBounds: [[73.0, 44.0], [92.0, 55.0]], // не улетать за пределы региона
       attributionControl: false,
     });
     baseRef.current = mode === 'satellite' ? 'satellite' : 'light';
