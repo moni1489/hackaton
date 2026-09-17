@@ -1,0 +1,13 @@
+# requirements для трей-агента (Windows и Linux)
+# Устанавливать: pip install -r requirements-tray.txt
+
+# Ядро
+requests>=2.32
+speedtest-cli>=2.1
+
+# Трей + иконки (GUI-режим)
+pystray>=0.19
+Pillow>=10.0
+
+# Сборка в .exe/.bin (PyInstaller)
+pyinstaller>=6.0
