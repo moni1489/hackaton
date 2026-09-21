@@ -21,6 +21,8 @@ from ..security import (
 from ..services.lines import main_monitors
 from ..services.ml.features import CAUSE_LABELS, CAUSE_OWNER
 from ..services.predictive import analyze, region_overview
+from ..services.rating import history as rating_history, rating as build_rating
+from ..services.retention import MIN_RETENTION_DAYS
 from ..services.smart_sync import stats as sync_stats
 from ..services.status import (
     ALL_STATUSES, STATUS_NO_DATA, STATUS_OFFLINE, effective_status, freshness, is_fresh,
@@ -409,6 +411,35 @@ def risk_queue(limit: int = 8, as_of: datetime | None = None, db: Session = Depe
     rows = region_overview(db, limit=limit, school_ids=_school_ids(db, user), now=now)
     cache_set(key, rows, ttl=30)
     return rows
+
+
+@router.get("/rating", summary="Рейтинг организаций за период (до квартала) с динамикой к прошлому периоду")
+def school_rating(days: int = Query(30, ge=1, le=MIN_RETENTION_DAYS), as_of: datetime | None = None,
+                  db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _guard(user)
+    key = f"dash:rating:{scope_key(user)}:{days}:{as_of.isoformat() if as_of else 'live'}"
+    cached = cache_get(key)
+    if cached:
+        return cached
+    schools = _scope(db.query(School), user).all()
+    # ponytail: агрегат считается по сырым замерам на лету (кэш 60 с); при росте базы — суточная сводка.
+    data = build_rating(db, _now(as_of), days, [s.id for s in schools], schools)
+    cache_set(key, data, ttl=60)
+    return data
+
+
+@router.get("/rating/history", summary="Дневная динамика: среднее по области видимости или одна школа")
+def rating_dynamics(days: int = Query(90, ge=1, le=MIN_RETENTION_DAYS), school_id: int | None = None,
+                    as_of: datetime | None = None, db: Session = Depends(get_db),
+                    user: User = Depends(current_user)):
+    _guard(user)
+    ids = _school_ids(db, user)
+    if school_id is not None:
+        school = db.get(School, school_id)
+        if not school or not can_access_school(user, school):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
+        ids = [school_id]
+    return rating_history(db, _now(as_of), days, ids)
 
 
 @router.get("/trend", summary="Почасовой тренд по основным линиям (для графика)")

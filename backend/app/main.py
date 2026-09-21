@@ -17,6 +17,7 @@ from .database import SessionLocal, engine, migrate_schema
 from .routers import admin, agent, ai, auth, export, ml, web, public_data
 from .services.external_network import poll_sources
 from .services.lines import ensure_defaults
+from .services.retention import retention_loop
 from .services.smart_sync import start_workers, stats, stop_workers
 
 logging.basicConfig(level=logging.INFO,
@@ -32,10 +33,14 @@ async def lifespan(app: FastAPI):
         ensure_defaults(db)
     await start_workers()
     external_task = asyncio.create_task(poll_sources()) if settings.EXTERNAL_POLL_ENABLED else None
+    retention_task = asyncio.create_task(retention_loop())
     log.info("Запуск: БД=%s, кэш=%s", engine.dialect.name, backend_name())
     try:
         yield
     finally:
+        retention_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await retention_task
         if external_task:
             external_task.cancel()
             with suppress(asyncio.CancelledError):
