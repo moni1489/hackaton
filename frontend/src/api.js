@@ -1,6 +1,7 @@
 /* Клиент API: токен, обработка ошибок, скачивание файлов. */
 // По умолчанию (и в dev, и в prod) — бэкенд на Render; для локального бэка: VITE_API_URL=http://localhost:8000
-export const API_URL = import.meta.env.VITE_API_URL || 'https://codemasters1.onrender.com';
+// Пустая VITE_API_URL= — тот же адрес, что у страницы (демо-сборка, которую раздаёт сам бэкенд).
+export const API_URL = import.meta.env.VITE_API_URL ?? 'https://codemasters1.onrender.com';
 
 const TOKEN_KEY = 'vko.token';
 const USER_KEY = 'vko.user';
@@ -23,7 +24,7 @@ export class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
-async function request(path, { method = 'GET', body, raw = false } = {}) {
+export async function request(path, { method = 'GET', body, raw = false } = {}) {
   const headers = {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
