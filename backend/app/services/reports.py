@@ -30,7 +30,8 @@ for path, name, bold in (
 
 
 def sla_report(analysis: dict, school: dict, incidents: list[dict],
-               verdict: dict | None = None) -> bytes:
+               verdict: dict | None = None, banner: str | None = None) -> bytes:
+    """banner — заметная плашка вверху первой страницы (демонстрационные документы)."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=18 * mm, bottomMargin=18 * mm,
                             leftMargin=18 * mm, rightMargin=18 * mm,
@@ -44,7 +45,15 @@ def sla_report(analysis: dict, school: dict, incidents: list[dict],
                         spaceBefore=12, spaceAfter=6, textColor=colors.HexColor("#0F172A"))
     body = ParagraphStyle("body", parent=base["Normal"], fontName=_FONT, fontSize=9.5, leading=14)
 
-    story = [
+    story = []
+    if banner:
+        warn = ParagraphStyle("banner", parent=base["Normal"], fontName=_FONT_BOLD, fontSize=9,
+                              leading=12, alignment=TA_CENTER, textColor=colors.HexColor("#B42318"),
+                              backColor=colors.HexColor("#FEF3F2"), borderPadding=6,
+                              borderColor=colors.HexColor("#FDA29B"), borderWidth=0.8,
+                              spaceAfter=10)
+        story.append(Paragraph(banner, warn))
+    story += [
         Paragraph("АКТ ФИКСАЦИИ НАРУШЕНИЯ ПОКАЗАТЕЛЕЙ КАЧЕСТВА СВЯЗИ (SLA)", h1),
         Paragraph("Система автономного мониторинга организаций образования ВКО · "
                   f"сформировано {datetime.now():%d.%m.%Y %H:%M}", sub),

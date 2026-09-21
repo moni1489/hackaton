@@ -46,14 +46,13 @@ def _robust(values: list[float]) -> tuple[float, float]:
     return med, max(mad, 0.03 * med, 0.01)
 
 
-def build(db: Session) -> dict:
-    """Строит профили по всей истории. Тяжёлая операция — выполняется офлайн."""
-    contracts = {s.id: (s.contract_speed_down or 100.0) for s in db.query(School).all()}
-    per_device: dict[str, dict[int, list[float]]] = {}
+def profiles_from_rows(rows, contracts: dict[int, float]) -> dict[str, dict]:
+    """Профили ПК по строкам (device_id, school_id, timestamp, download, offline).
 
-    query = db.query(Measurement.device_id, Measurement.school_id, Measurement.timestamp,
-                     Measurement.download_speed, Measurement.is_offline)
-    for device_id, school_id, ts, download, offline in query.yield_per(5000):
+    Чистая функция: ничего не читает и не пишет — на ней строится и боевой build(),
+    и воспроизводимый демонстрационный сценарий (services/demo)."""
+    per_device: dict[str, dict[int, list[float]]] = {}
+    for device_id, school_id, ts, download, offline in rows:
         if not ts or offline or device_id is None:
             continue   # обрывы в норму не входят: базис — это «как работает исправный канал»
         contract = contracts.get(school_id) or 100.0
@@ -74,6 +73,15 @@ def build(db: Session) -> dict:
             med, mad = _robust(values)
             entry["buckets"][str(key)] = [round(med, 5), round(mad, 5), len(values)]
         profiles[device_id] = entry
+    return profiles
+
+
+def build(db: Session) -> dict:
+    """Строит профили по всей истории. Тяжёлая операция — выполняется офлайн."""
+    contracts = {s.id: (s.contract_speed_down or 100.0) for s in db.query(School).all()}
+    query = db.query(Measurement.device_id, Measurement.school_id, Measurement.timestamp,
+                     Measurement.download_speed, Measurement.is_offline)
+    profiles = profiles_from_rows(query.yield_per(5000), contracts)
 
     payload = {"built_at": datetime.utcnow().isoformat(), "devices": len(profiles),
                "profiles": profiles}
@@ -126,9 +134,10 @@ def score(device_id: str, ts: datetime, ratio: float, offline: bool,
 
 
 def snapshot(db: Session, at: datetime, window_min: int = 60,
-             school_ids: list[int] | None = None) -> dict[str, dict]:
-    """Состояние всех ПК в окне вокруг момента `at` — вход для атрибуции."""
-    store = profiles(db)
+             school_ids: list[int] | None = None, store: dict | None = None) -> dict[str, dict]:
+    """Состояние всех ПК в окне вокруг момента `at` — вход для атрибуции.
+    store — готовые профили (демо-сценарий); по умолчанию — боевые."""
+    store = store or profiles(db)
     contracts = {s.id: (s.contract_speed_down or 100.0) for s in db.query(School).all()}
     half = timedelta(minutes=window_min)
     query = db.query(Measurement).filter(Measurement.timestamp >= at - half,
