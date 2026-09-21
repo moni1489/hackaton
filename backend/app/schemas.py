@@ -36,6 +36,8 @@ class EnrollRequest(BaseModel):
     device_type: str = "Рабочая станция"
     link_mode: str = "Ethernet 1 Гбит/с"
     cert_fingerprint: str | None = None
+    line_code: str | None = None     # какую линию измеряет точка мониторинга (ТЗ п.10)
+    line_role: str | None = None     # main | backup — при создании новой линии
 
 
 class EnrollResponse(BaseModel):
