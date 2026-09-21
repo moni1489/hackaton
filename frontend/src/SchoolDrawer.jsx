@@ -163,6 +163,13 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
               sub={`ПК-агентов: ${school.devices.length}`} />
           </div>
 
+          {school.published_connections?.length > 0 && <div className="insight" style={{ display: 'block', marginBottom: 16 }}>
+            <strong>Опубликованные параметры подключения</strong>
+            {school.published_connections.map((c) => <p key={c.key}>
+              {c.technology} · {c.speed_down_mbps} Мбит/с · <a href={c.source_url} target="_blank" rel="noreferrer">Источник gov.kz</a><br />
+              Дата публикации не установлена. {c.note}
+            </p>)}
+          </div>}
           <Section title="Качество канала за период" />
           <div className="block">
             <SpeedChart measurements={measurements} contract={school.contract_speed_down} />

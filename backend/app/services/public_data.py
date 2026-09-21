@@ -86,6 +86,8 @@ def import_connections(db: Session, snapshot: dict) -> dict:
         aliases = {normalize_name(n) for n in row.get('verified_aliases', [])}
         candidates = [s for s in schools if s.region == row['district'] and normalize_name(s.name or '') in aliases]
         item.school_id = candidates[0].id if len(candidates) == 1 else None
+        if len(candidates) == 1:
+            candidates[0].connection_type = row['technology']
         matched += item.school_id is not None
         for key in ('school_name', 'district', 'technology', 'speed_down_mbps', 'note'):
             setattr(item, key, row.get(key))

@@ -6,6 +6,7 @@ import DeviceDrawer from './DeviceDrawer';
 import Login from './Login';
 import MapView from './MapView';
 import DiagnosticsPage from './Diagnostics';
+import PublicDataPage from './PublicData';
 import { AdminPage, DevicesPage, IncidentsPage, SchoolsPage } from './Pages';
 import Rail from './Rail';
 import SchoolDrawer from './SchoolDrawer';
@@ -20,11 +21,13 @@ const NAV = [
   { key: 'schools', label: 'Школы', Icon: IcoSchool },
   { key: 'devices', label: 'ПК-агенты', Icon: IcoPc },
   { key: 'diagnostics', label: 'Диагностика', Icon: IcoNodes },
+  { key: 'public-data', label: 'Открытые данные', Icon: IcoLayers },
   { key: 'incidents', label: 'Инциденты', Icon: IcoAlert },
   { key: 'admin', label: 'Управление', Icon: IcoGear },
 ];
 
 const TITLES = {
+  'public-data': 'Открытые данные и внешняя проверка',
   map: 'Мониторинг', schools: 'Школы', devices: 'ПК-агенты',
   diagnostics: 'Диагностика · кто виноват', incidents: 'Инциденты', admin: 'Управление',
 };
@@ -314,6 +317,7 @@ function Dashboard({ user, onLogout }) {
         ) : null}
 
         {view === 'schools' ? <SchoolsPage schools={schools} onOpenSchool={openSchool} /> : null}
+        {view === 'public-data' ? <PublicDataPage /> : null}
         {view === 'devices' ? <DevicesPage onOpenDevice={setDeviceDrawer} /> : null}
         {view === 'diagnostics' ? (
           <DiagnosticsPage role={user?.role} onOpenSchool={openSchool} />

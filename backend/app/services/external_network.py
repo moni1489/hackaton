@@ -37,7 +37,8 @@ def get_json(client, url, **kwargs):
 def fetch_ioda(client, now):
     start = now - timedelta(days=365)
     events = []
-    for page in range(1, 101):
+    # IODA pages are zero-based (unlike the eGov public catalog).
+    for page in range(100):
         data = get_json(client, IODA + '/outages/events', params={
             'entityType': 'region', 'entityCode': settings.IODA_REGION_CODE,
             'from': epoch(start), 'until': epoch(now), 'limit': 100, 'page': page,
@@ -183,7 +184,8 @@ def network_context(db: Session, at=None):
             'payload': json.loads(s.payload_json or '{}')}
     ioda = states.get('ioda')
     matches = []
-    covered = bool(ioda and ioda.fetched_at and ioda.window_start <= at <= ioda.window_end)
+    covered = bool(ioda and ioda.fetched_at and ioda.window_start and ioda.window_end
+                   and ioda.window_start <= at <= ioda.window_end)
     if covered:
         for e in output['ioda']['payload'].get('events', []):
             if e['start'] <= epoch(at) < e['start'] + e['duration']:
@@ -204,7 +206,13 @@ async def poll_sources():
     while True:
         try:
             # HTTP/BigQuery never blocks the API event loop.
-            await asyncio.to_thread(refresh_sources, ('ioda', 'ripe_atlas'))
+            selected = ['ioda', 'ripe_atlas']
+            if settings.MLAB_PROJECT:
+                with SessionLocal() as db:
+                    state = db.get(ExternalSourceState, 'mlab')
+                    if not state or not state.attempted_at or utcnow() - state.attempted_at >= timedelta(days=1):
+                        selected.append('mlab')
+            await asyncio.to_thread(refresh_sources, selected)
         except Exception:
             log.exception('External polling failed')
         await asyncio.sleep(max(60, settings.EXTERNAL_REFRESH_SEC))

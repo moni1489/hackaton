@@ -14,11 +14,12 @@ try:
 
     @celery_app.task(name="sync.process_batch", bind=True, max_retries=5,
                      default_retry_delay=30, rate_limit="200/m")
-    def process_batch_task(self, batch_id: int, device_id: str, school_id: int, items: list):
-        """Ограничение rate_limit размазывает пик офлайн-догрузок во времени."""
+    def process_batch_task(self, batch_id: int):
+        """Пакет лежит в БД (SyncBatch.payload): в брокер уходит только его номер.
+        rate_limit размазывает пик офлайн-догрузок во времени."""
         from .smart_sync import persist_batch
         try:
-            persist_batch(batch_id, device_id, school_id, items)
+            persist_batch(batch_id)
         except Exception as exc:  # noqa: BLE001
             raise self.retry(exc=exc) from exc
 

@@ -42,6 +42,9 @@ async function request(path, { method = 'GET', body, raw = false } = {}) {
 }
 
 export const api = {
+  publicSchools: () => request('/api/public-data/schools?limit=500'),
+  publicConnections: () => request('/api/public-data/connections'),
+  externalNetwork: () => request('/api/public-data/network'),
   login: async (email, password) => {
     const data = await request('/api/auth/login', { method: 'POST', body: { email, password } });
     localStorage.setItem(TOKEN_KEY, data.access_token);
