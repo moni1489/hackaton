@@ -114,6 +114,13 @@ def diagnose(db: Session, school_id: int, at: datetime | None = None,
         snap = baseline.snapshot(db, at)
 
     vector, ctx = attribution_features(school_id, snap, topo)
+    from ..external_network import network_context
+    external = network_context(db, at)
+    ctx["external_network"] = {
+        "ioda_regional_event": external["ioda_regional_event"],
+        "ioda_matching_events": external["ioda_matching_events"],
+        "interpretation": external["interpretation"],
+    }
     net = model()
     if net:
         probs = net.predict_proba(vector)

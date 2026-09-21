@@ -58,6 +58,15 @@ class Settings(BaseSettings):
     GENAI_TOKEN: str = ""
     GENAI_MODEL: str = "gemini-1.5-pro"
 
+    # Независимые источники: публичные измерения, без создания платных тестов.
+    EXTERNAL_POLL_ENABLED: bool = True
+    EXTERNAL_REFRESH_SEC: int = 900
+    IODA_REGION_CODE: str = "2083"
+    RIPE_PROBE_IDS: str = "6753,1016376"
+    RIPE_MEASUREMENT_IDS: str = "1001,1004"
+    MLAB_PROJECT: str = ""
+    MLAB_MAX_BYTES_BILLED: int = 10_000_000_000
+
 
 @lru_cache
 def get_settings() -> Settings:

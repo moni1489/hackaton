@@ -157,8 +157,10 @@ def school_detail(school_id: int, db: Session = Depends(get_db),
     devices = db.query(Device).filter(Device.school_id == school_id).order_by(Device.id).all()
     incidents = (db.query(Incident).filter(Incident.school_id == school_id)
                  .order_by(Incident.id.desc()).limit(50).all())
+    from ..services.public_data import school_connections
     return {
         **school_brief(school),
+        "published_connections": school_connections(db, school_id),
         "contact_name": school.contact_name, "contact_phone": school.contact_phone,
         "contact_email": school.contact_email, "provider_phone": school.provider_phone,
         "devices": [device_dict(d) for d in devices],
