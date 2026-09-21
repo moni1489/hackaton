@@ -49,7 +49,7 @@ def summary(as_of: datetime | None = None, db: Session = Depends(get_db),
     now = _now(as_of)
     ids = _visible(db, user)
     return {**attribution.cause_summary(db, school_ids=ids, now=now),
-            "freshness": {**freshness(last_measured(db, ids), now),
+            "freshness": {**freshness(last_measured(db, ids, upto=now), now),
                           "mode": "history" if as_of else "live"}}
 
 

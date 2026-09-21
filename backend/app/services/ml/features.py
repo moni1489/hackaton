@@ -140,7 +140,9 @@ def attribution_features(school_id: int, snap: dict, topo: Topology) -> tuple[li
     states = [(d, snap[d.device_id]) for d in devices if d.device_id in snap]
 
     if not states:
-        return [0.0] * len(ATTRIBUTION_FEATURES), {"devices_total": len(devices),
+        # devices_total — ПК С ДАННЫМИ: ноль означает «замеров нет», а не «ПК нет».
+        return [0.0] * len(ATTRIBUTION_FEATURES), {"devices_total": 0,
+                                                   "devices_registered": len(devices),
                                                    "devices_affected": 0, "affected": []}
 
     affected = [(d, s) for d, s in states if s["anomaly"]]

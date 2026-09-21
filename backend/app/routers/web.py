@@ -141,7 +141,7 @@ def overview(as_of: datetime | None = None, db: Session = Depends(get_db),
         counts[key_map[eff[s.id]]] += 1
 
     with_data = len(schools) - counts["no_data"]
-    last = last_measured(db, None if user.role in FULL_SCOPE_ROLES else ids)
+    last = last_measured(db, None if user.role in FULL_SCOPE_ROLES else ids, upto=now)
     payload = {
         "total_schools": len(schools),
         "total_devices": len(device_rows),

@@ -151,8 +151,13 @@ def interval_for(status: str) -> tuple[int, str]:
 
 # --- Свежесть данных --------------------------------------------------------
 
+CLOCK_SKEW = timedelta(minutes=5)
+
+
 def is_fresh(last: datetime | None, now: datetime, th: Thresholds | None = None) -> bool:
-    return last is not None and now - last <= timedelta(
+    """Замер свежий, если он не старше порога и не «из будущего»: в режиме истории
+    (now = as_of) состояние, записанное позже этого момента, тогда ещё не существовало."""
+    return last is not None and -CLOCK_SKEW <= now - last <= timedelta(
         minutes=(th or thresholds()).stale_after_min)
 
 
@@ -171,11 +176,15 @@ def freshness(last: datetime | None, now: datetime, th: Thresholds | None = None
             "is_stale": not is_fresh(last, now, th)}
 
 
-def last_measured(db, school_ids: list[int] | None = None) -> datetime | None:
+def last_measured(db, school_ids: list[int] | None = None,
+                  upto: datetime | None = None) -> datetime | None:
     """Время самого свежего замера в таблице измерений (None-список школ — вся область).
-    Берётся из измерений, а не из School.last_measurement: это факт, а не копия статуса."""
+    Берётся из измерений, а не из School.last_measurement: это факт, а не копия статуса.
+    upto — «на момент»: в режиме истории замеры позже этого времени ещё не существовали."""
     from ..models import Measurement
     query = db.query(func.max(Measurement.timestamp))
+    if upto is not None:
+        query = query.filter(Measurement.timestamp <= upto)
     if school_ids is not None:
         query = query.filter(Measurement.school_id.in_(school_ids or [-1]))
     return query.scalar()
