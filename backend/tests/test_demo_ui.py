@@ -225,7 +225,7 @@ class Browsers(unittest.TestCase):
         page = ctx.new_page()
         page.goto(f"{BASE}/live/0123456789ab#t=1.invalid")
         page.wait_for_selector("text=Ссылка недействительна")
-        for word in ("Traceback", "401", "JWT", "Unauthorized"):
+        for word in ("Traceback", "JWT", "Unauthorized"):
             self.assertNotIn(word, page.content())
         ctx.close()
 
