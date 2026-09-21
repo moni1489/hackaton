@@ -11,9 +11,11 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from ...models import Measurement, School
+from ..lines import main_monitors
 from . import baseline
 from .features import FORECAST_FEATURES, Topology, forecast_features
 from .attribution import _quoted
+from ..status import effective_status
 from .linmodel import SoftmaxRegression
 
 HORIZON_H = 6
@@ -54,12 +56,21 @@ def predict(db: Session, school_id: int, at: datetime | None = None,
     if snap is None:
         snap = baseline.snapshot(db, at)
 
+    # Прогноз — о канале школы: замеры точек мониторинга основной линии, а не рабочих мест.
     rows = (db.query(Measurement)
             .filter(Measurement.school_id == school_id,
-                    Measurement.timestamp >= at - timedelta(hours=26))
+                    Measurement.timestamp >= at - timedelta(hours=26),
+                    Measurement.timestamp <= at, Measurement.device_id.in_(main_monitors()))
             .order_by(Measurement.timestamp.asc()).all())
     vector = forecast_features(school_id, at, rows, snap, topo)
     net = model()
+    if not rows:
+        last = school.last_measurement
+        return {"school_id": school_id, "school_name": school.name,
+                "horizon_hours": HORIZON_H, "probability": None, "band": "нет свежих данных",
+                "stale": True, "last_measurement": last.isoformat() if last else None,
+                "source": "нет замеров основной линии за последние 26 ч",
+                "model_version": net.version if net else None}
     if vector is None or net is None:
         return {"school_id": school_id, "school_name": school.name,
                 "horizon_hours": HORIZON_H, "probability": None,
@@ -102,19 +113,25 @@ def _advice(probability: float, school: School) -> str:
 
 
 def region_forecast(db: Session, school_ids: list[int] | None = None,
-                    limit: int = 12, threshold: float = 0.25) -> list[dict]:
-    """Очередь «где рванёт в ближайшие часы» — поверх карты области."""
+                    limit: int = 12, threshold: float = 0.25,
+                    now: datetime | None = None) -> list[dict]:
+    """Очередь «где рванёт в ближайшие часы» — поверх карты области.
+
+    Пусто и когда рисков нет, и когда свежих замеров нет: различать их по свежести данных.
+    school_ids=None — вся область; пустой список — нет доступных школ.
+    """
     net = model()
     if not net:
         return []
-    now = datetime.utcnow()
+    now = now or datetime.utcnow()
     topo = Topology(db)
-    snap = baseline.snapshot(db, now, window_min=90, school_ids=school_ids)
+    snap = baseline.snapshot(db, now, window_min=90)   # соседи нужны для сравнения — вся область
 
-    targets = school_ids or list(topo.schools)
+    targets = list(topo.schools) if school_ids is None else school_ids
     since = now - timedelta(hours=26)
     query = (db.query(Measurement)
-             .filter(Measurement.timestamp >= since, Measurement.school_id.in_(targets)))
+             .filter(Measurement.timestamp >= since, Measurement.timestamp <= now,
+                     Measurement.school_id.in_(targets), Measurement.device_id.in_(main_monitors())))
     per_school: dict[int, list] = {}
     for row in query.all():
         per_school.setdefault(row.school_id, []).append(row)
@@ -131,7 +148,8 @@ def region_forecast(db: Session, school_ids: list[int] | None = None,
         school = topo.schools[school_id]
         out.append({"school_id": school_id, "school_name": school.name,
                     "district": school.region, "provider": school.provider,
-                    "lat": school.lat, "lng": school.lng, "status": school.status,
+                    "lat": school.lat, "lng": school.lng,
+                    "status": effective_status(school.status, school.last_measurement, now),
                     "probability": round(probability, 3), "band": _band(probability),
                     "horizon_hours": HORIZON_H})
     out.sort(key=lambda r: -r["probability"])

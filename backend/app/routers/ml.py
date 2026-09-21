@@ -8,11 +8,15 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Device, FaultEvent, Incident, School, User
-from ..security import can_access_school, current_user, require_roles, write_audit
+from ..security import (
+    FULL_SCOPE_ROLES, can_access_school, current_user, require_roles, scope_schools, write_audit,
+)
+from ..services.status import freshness, naive_utc
 from ..services.ml import attribution, baseline, forecast
 from ..services.ml.features import CAUSES, CAUSE_LABELS, CAUSE_OWNER
 from ..services.ml.train import train_models
@@ -21,34 +25,45 @@ router = APIRouter(prefix="/api/ml", tags=["ML API — «Виновник»"])
 
 
 def _visible(db: Session, user: User) -> list[int] | None:
-    """Идентификаторы школ в зоне видимости роли; None — вся область."""
-    if user.role in ("admin", "operator"):
+    """Идентификаторы школ в зоне видимости роли; None — вся область; [] — ничего."""
+    if user.role in FULL_SCOPE_ROLES:
         return None
-    if user.role == "school" and user.school_id:
-        return [user.school_id]
-    if user.role == "provider" and user.provider_name:
-        return [s.id for s in db.query(School)
-                .filter(School.provider == user.provider_name).all()]
-    return []
+    return [i for (i,) in scope_schools(db.query(School.id), user)]
 
 
-@router.get("/board", summary="Живая доска вердиктов: кто виноват прямо сейчас")
-def board(limit: int = 40, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return attribution.live_board(db, school_ids=_visible(db, user), limit=min(limit, 200))
+def _now(as_of: datetime | None) -> datetime:
+    return naive_utc(as_of) if as_of else datetime.utcnow()
 
 
-@router.get("/summary", summary="Сводка ответственности по области")
-def summary(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return attribution.cause_summary(db, school_ids=_visible(db, user))
+@router.get("/board", summary="Живая доска предполагаемых источников")
+def board(limit: int = 40, as_of: datetime | None = None, db: Session = Depends(get_db),
+          user: User = Depends(current_user)):
+    return attribution.live_board(db, school_ids=_visible(db, user), limit=min(limit, 200),
+                                  now=_now(as_of))
 
 
-@router.get("/attribution/{school_id}", summary="Вердикт по организации")
-def school_attribution(school_id: int, at: datetime | None = None,
+@router.get("/summary", summary="Сводка предполагаемых источников по области")
+def summary(as_of: datetime | None = None, db: Session = Depends(get_db),
+            user: User = Depends(current_user)):
+    """Вместе со сводкой отдаётся свежесть данных: пустая доска при устаревших данных
+    означает «нет данных», а не «отклонений нет»."""
+    now = _now(as_of)
+    ids = _visible(db, user)
+    last = db.query(func.max(School.last_measurement))
+    if ids is not None:
+        last = last.filter(School.id.in_(ids or [-1]))
+    return {**attribution.cause_summary(db, school_ids=ids, now=now),
+            "freshness": {**freshness(last.scalar(), now),
+                          "mode": "history" if as_of else "live"}}
+
+
+@router.get("/attribution/{school_id}", summary="Гипотеза об источнике по организации")
+def school_attribution(school_id: int, at: datetime | None = None, as_of: datetime | None = None,
                        db: Session = Depends(get_db), user: User = Depends(current_user)):
     school = db.get(School, school_id)
     if not school or not can_access_school(user, school):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
-    return attribution.diagnose(db, school_id, at=at)
+    return attribution.diagnose(db, school_id, at=naive_utc(at) if at else _now(as_of))
 
 
 @router.get("/incident/{incident_id}", summary="Вердикт по инциденту (с записью в карточку)")
@@ -107,19 +122,19 @@ def operator_verdict(incident_id: int, cause: str, request: Request,
 
 
 @router.get("/forecast/{school_id}", summary="Вероятность выхода за SLA в ближайшие 6 часов")
-def school_forecast(school_id: int, db: Session = Depends(get_db),
+def school_forecast(school_id: int, as_of: datetime | None = None, db: Session = Depends(get_db),
                     user: User = Depends(current_user)):
     school = db.get(School, school_id)
     if not school or not can_access_school(user, school):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
-    return forecast.predict(db, school_id)
+    return forecast.predict(db, school_id, at=_now(as_of))
 
 
 @router.get("/forecast", summary="Очередь риска по области — где рванёт первым")
-def region_forecast(limit: int = 12, threshold: float = 0.25,
+def region_forecast(limit: int = 12, threshold: float = 0.25, as_of: datetime | None = None,
                     db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return forecast.region_forecast(db, school_ids=_visible(db, user),
-                                    limit=min(limit, 100), threshold=threshold)
+    return forecast.region_forecast(db, school_ids=_visible(db, user), limit=min(limit, 100),
+                                    threshold=threshold, now=_now(as_of))
 
 
 @router.get("/timeline/{device_id}", summary="Факт против сезонной нормы по ПК")
@@ -150,6 +165,8 @@ def model_info(db: Session = Depends(get_db), user: User = Depends(current_user)
             "features": attr.features if attr else [],
             "metrics": attr.metrics if attr else {},
             "fallback": "детерминированные правила границ поражения",
+            "output": "предполагаемый источник + достаточность данных; без сопоставимых "
+                      "школ вывод «источник не определён»",
         },
         "forecast": {
             "trained": bool(fcst),
