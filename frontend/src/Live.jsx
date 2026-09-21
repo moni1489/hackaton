@@ -1,13 +1,13 @@
 /* Дашборд зрителя демонстрации: только чтение.
    Маршрут /live/{session_id}#t=<временный токен>. Состояние приходит с сервера целиком
-   (SSE; при недоступности потока — опрос каждые 2 с), клиент ничего не считает и не запускает.
+   (SSE; при недоступности потока — опрос каждые 1,5 с), клиент ничего не считает и не запускает.
    /live/replay — резервное воспроизведение записи того же сценария без сервера и интернета. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API_URL } from './api';
 import { statusMeta } from './ui';
 import './demo.css';
 
-const POLL_MS = 2000;
+const POLL_MS = 1500;               // худший случай задержки при опросе ≈ интервал + запрос < 2 с
 const STREAM_SILENCE_MS = 15000;   // сервер шлёт «пульс» каждые 5 с; тишина дольше — поток мёртв
 const FIRST_MESSAGE_MS = 6000;
 const PROVIDER_COLORS = ['#7C5CF0', '#0E9C8A', '#D9730D', '#B23A8E'];
@@ -179,7 +179,7 @@ function useNow(active) {   // «сейчас» для обратного отс
 const CONN_LABEL = {
   connecting: ['off', 'Подключение…'],
   live: ['ok', 'Онлайн · синхронно'],
-  polling: ['warn', 'Резервный режим: обновление раз в 2 с'],
+  polling: ['warn', 'Резервный режим: обновление каждые 1,5 с'],
   offline: ['danger', 'Нет связи · переподключаемся'],
   replay: ['warn', 'Запись · без сервера'],
 };
@@ -382,7 +382,7 @@ function Confidence({ ml }) {
         <div className="lv-bar"><i style={{ width: pct(ml.confidence) }} /><u style={{ left: pct(ml.confidence_cap) }} /></div>
         <span>Уверенность модели · потолок при таком объёме данных {pct(ml.confidence_cap)}</span>
         {capped ? (
-          <em>Сырая оценка модели {pct(ml.model_confidence)} ограничена: она не калибрована и не равна вероятности ошибки.</em>
+          <em>Сырая оценка модели {(ml.model_confidence * 100).toFixed(1)}% ограничена: она не калибрована и не равна вероятности ошибки.</em>
         ) : null}
       </div>
     </div>

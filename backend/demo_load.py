@@ -59,7 +59,7 @@ async def poll_viewer(client, base, sid, token, index, seen, ready):
                 return
         except httpx.HTTPError:
             pass
-        await asyncio.sleep(2.0)
+        await asyncio.sleep(1.5)          # как в клиенте (Live.jsx: POLL_MS)
 
 
 async def main(url: str, viewers: int, rounds: int) -> int:
