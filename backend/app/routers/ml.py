@@ -138,8 +138,8 @@ def region_forecast(limit: int = 12, threshold: float = 0.25, as_of: datetime | 
 
 
 @router.get("/timeline/{device_id}", summary="Факт против сезонной нормы по ПК")
-def timeline(device_id: str, hours: int = 24, db: Session = Depends(get_db),
-             user: User = Depends(current_user)):
+def timeline(device_id: str, hours: int = 24, as_of: datetime | None = None,
+             db: Session = Depends(get_db), user: User = Depends(current_user)):
     device = db.query(Device).filter(Device.device_id == device_id).first()
     if not device:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "ПК-агент не найден")
@@ -147,7 +147,7 @@ def timeline(device_id: str, hours: int = 24, db: Session = Depends(get_db),
     if not school or not can_access_school(user, school):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
     return {"device_id": device_id, "hours": hours,
-            "points": baseline.device_timeline(db, device_id, hours=hours)}
+            "points": baseline.device_timeline(db, device_id, hours=hours, now=_now(as_of))}
 
 
 @router.get("/model-info", summary="Версии моделей, метрики и покрытие базиса")
