@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { statusMeta } from './ui';
+import { fmtStamp, statusMeta } from './ui';
 
 mapboxgl.accessToken =
   'pk.eyJ1IjoiYmVicnVzZDMyIiwiYSI6ImNtbXozZTEzZTA0M3oycG93M3R5NHBranQifQ.pc5OgxomRXUl5pRDVktXuA';
@@ -25,8 +25,10 @@ const toGeoJSON = (schools) => ({
         id: s.id, name: s.name, code: s.school_id_code, status: s.status,
         color: statusMeta(s.status).color,
         provider: s.provider, connection: s.connection_type,
-        download: s.current_download ?? 0, ping: s.current_ping ?? 0,
-        contract: s.contract_speed_down ?? 0,
+        // Устаревший замер не выдаётся за текущий показатель.
+        download: s.is_stale ? '—' : (s.current_download ?? 0),
+        ping: s.is_stale ? '—' : (s.current_ping ?? 0),
+        contract: s.contract_speed_down ?? 0, last: fmtStamp(s.last_measurement),
       },
     })),
 });
@@ -110,8 +112,9 @@ export default function MapView({ schools, mode, onOpenSchool, onSelect, selecte
         <div class="map-pop-grid">
           <div><span>Загрузка</span><b style="color:${meta.color}">${props.download}</b></div>
           <div><span>Договор</span><b>${props.contract}</b></div>
-          <div><span>Задержка</span><b>${props.ping} мс</b></div>
+          <div><span>Задержка</span><b>${props.ping === '—' ? '—' : `${props.ping} мс`}</b></div>
           <div><span>Линия</span><b style="font-size:11px">${props.connection}</b></div>
+          <div style="grid-column:1/-1"><span>Последний замер</span><b style="font-size:11px">${props.last}</b></div>
         </div>
         <button class="btn accent" style="margin-top:13px;width:100%">Карточка школы</button>`;
       node.querySelector('button').addEventListener('click', () => {
