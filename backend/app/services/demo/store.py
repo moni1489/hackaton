@@ -114,11 +114,19 @@ class Store:
                 if raw is not None and ok:
                     self._restore_locked(sid, raw)
         doc = json.loads(raw) if raw else None
-        if doc and from_redis:      # держим зеркало свежим: оно понадобится, если Redis упадёт
+        if doc and from_redis:
+            stale = False
             with self._mu:
-                self._docs[sid], self._ver[sid] = raw, doc["version"]
+                if self._ver.get(sid, 0) > doc["version"] and sid in self._docs:
+                    # Redis отстал (был недоступен, пока мы писали в зеркало): он догоняет нас.
+                    raw, stale = self._docs[sid], True
+                    doc = json.loads(raw)
+                else:       # держим зеркало свежим: оно понадобится, если Redis упадёт
+                    self._docs[sid], self._ver[sid] = raw, doc["version"]
                 self._expires[sid] = time.time() + self._ttl()
                 self._gone.discard(sid)
+            if stale:
+                self._restore_locked(sid, raw)
         return doc
 
     def _restore_locked(self, sid: str, raw: str) -> None:
@@ -129,12 +137,12 @@ class Store:
     def version(self, sid: str) -> int | None:
         """Номер версии без разбора документа: по нему процессы понимают, что состояние изменилось."""
         raw, ok = self._try(lambda r: r.get(self._key("v", sid)))
-        if ok and raw is not None:
-            return int(raw)
         with self._mu:
             if sid in self._gone or self._expires.get(sid, 0) < time.time():
-                return None
-            return self._ver.get(sid)
+                return int(raw) if ok and raw is not None else None
+            mine = self._ver.get(sid)
+        # зеркало может быть новее Redis, если Redis был недоступен: берём большую версию
+        return max(int(raw), mine or 0) if ok and raw is not None else mine
 
     def save(self, doc: dict) -> dict:
         """Сохраняет документ, увеличивая версию. Вызывать под update()/create()."""

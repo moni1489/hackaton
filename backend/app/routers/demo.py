@@ -105,8 +105,7 @@ def _qr_svg(url: str) -> str | None:
         import segno
     except ImportError:            # без библиотеки панель покажет ссылку без QR
         return None
-    return segno.make(url, error="m").svg_inline(scale=6, border=2, dark="#0E1420", light="#FFFFFF",
-                                                 xmldecl=False, svgns=True)
+    return segno.make(url, error="m").svg_inline(scale=6, border=2, dark="#0E1420", light="#FFFFFF")
 
 
 def _link(request: Request, sid: str, override: str | None) -> dict:
