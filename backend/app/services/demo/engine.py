@@ -114,7 +114,7 @@ def create_session(title: str, seed: int, settings_in: dict | None, created_by: 
     if len(store.ids()) >= settings.DEMO_MAX_SESSIONS:
         raise Conflict("Достигнут лимит демо-сессий — закройте ненужные")
     doc = {
-        "id": secrets.token_urlsafe(9), "title": (title or "Демонстрация САМ ВКО").strip()[:80],
+        "id": secrets.token_hex(6), "title": (title or "Демонстрация САМ ВКО").strip()[:80],
         "seed": seed, "created_at": _iso(now), "created_by": created_by, "run": 1,
         "stage": "waiting", "stage_started": now, "armed_at": now, "substep": 0, "paused_at": None,
         "settings": _clean_settings(settings_in), "decision": None, "report": None,
