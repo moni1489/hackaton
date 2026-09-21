@@ -6,7 +6,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Качество связи", layout="wide")
+st.set_page_config(page_title="Качество связи", layout="wide", initial_sidebar_state="collapsed")
 
 # палитра и шрифты — из frontend/src/index.css
 C = dict(accent="#2F6BF6", ok="#17A65B", warn="#E4962A", danger="#E0453E", violet="#7C5CF0",
@@ -32,6 +32,12 @@ table.risk th {{ text-align:left; font-size:10.5px; letter-spacing:.09em; text-t
 table.risk td {{ padding:10px 8px; border-bottom:1px solid {C['line']}; color:{C['ink2']}; }}
 table.risk td:first-child {{ color:{C['ink']}; font-weight:700; }}
 h2, h3 {{ letter-spacing:-.02em; font-weight:800; }}
+.tbl-wrap {{ overflow-x:auto; }}
+@media (max-width: 640px) {{
+  .block-container {{ padding: 1rem .75rem 3rem; }}
+  .big {{ font-size:3rem; }}
+  table.risk {{ font-size:12px; }}
+}}
 </style>""", unsafe_allow_html=True)
 
 DB = Path(__file__).resolve().parent.parent.parent / "backend" / "hackathon.db"
@@ -118,9 +124,8 @@ if not DB.exists():
     st.error(f"Не найдена база {DB}"); st.stop()
 
 sch = schools()
-with st.sidebar:
-    st.header("Фильтры")
-    region = st.selectbox("Район", ["Все"] + sorted(sch["region"].dropna().unique())) 
+with st.expander("Фильтры", expanded=False):  # на телефоне сайдбар скрыт — фильтры на странице
+    region = st.selectbox("Район", ["Все"] + sorted(sch["region"].dropna().unique()))
     pool = sch if region == "Все" else sch[sch["region"] == region]
     school = st.selectbox("Школа", ["Все школы"] + list(pool["name"] + " · " + pool["region"]))
     days = st.slider("Дней истории", 1, 14, 7)
@@ -166,8 +171,8 @@ with right:
             f"<tr><td>{n}</td><td class='mono'>{v:.1f} ({k})</td><td class='mono'>{t}</td>"
             f"<td><span class='tag {'danger' if bad else 'ok'}'>{'Превышено' if bad else 'В норме'}</span></td></tr>"
             for n, v, _, bad, t, k in checks)
-        st.markdown("<table class='risk'><tr><th>Метрика</th><th>Худший час</th><th>Порог SLA</th>"
-                    f"<th>Статус</th></tr>{tr}</table>", unsafe_allow_html=True)
+        st.markdown("<div class='tbl-wrap'><table class='risk'><tr><th>Метрика</th><th>Худший час</th><th>Порог SLA</th>"
+                    f"<th>Статус</th></tr>{tr}</table></div>", unsafe_allow_html=True)
         st.markdown("**Выявленные проблемы:**")
         issues = [f"{n}: {v:.1f} — порог {t}" for n, v, _, bad, t, _ in checks if bad]
         offline = int(df["offline"].sum())

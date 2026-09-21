@@ -74,31 +74,37 @@ def band(probability: float) -> str:
     return "критическая"
 
 
-st.set_page_config(page_title="САМ ВКО · ML-демо", layout="wide")
+st.set_page_config(page_title="САМ ВКО · ML-демо", layout="wide", initial_sidebar_state="collapsed")
+# мобильная адаптация: меньше полей, крупные цели для пальца, метрики не режутся
+st.markdown("""<style>
+@media (max-width: 640px) {
+  .block-container { padding: 1rem .75rem 3rem; }
+  h1 { font-size: 1.6rem !important; }
+  h2 { font-size: 1.3rem !important; }
+  [data-testid="stMetricValue"] { font-size: 1.3rem; }
+  .stButton button { min-height: 3rem; }
+}
+</style>""", unsafe_allow_html=True)
 st.title("САМ ВКО — демо ML-моделей")
 st.caption("«Виновник» деградации канала и прогноз выхода за SLA на 6 часов вперёд.")
 
-with st.sidebar:
-    st.header("Настройки")
-    task = st.radio("Модель", ["Атрибуция причины («кто виноват»)", "Прогноз пробоя SLA"])
-    is_attribution = task.startswith("Атрибуция")
-    model_name = "attribution" if is_attribution else "forecast"
-    sliders = ATTRIBUTION_SLIDERS if is_attribution else FORECAST_SLIDERS
+# все элементы управления — на странице, не в сайдбаре: на телефоне он скрыт за меню
+task = st.radio("Модель", ["Атрибуция причины («кто виноват»)", "Прогноз пробоя SLA"], horizontal=True)
+is_attribution = task.startswith("Атрибуция")
+model_name = "attribution" if is_attribution else "forecast"
+sliders = ATTRIBUTION_SLIDERS if is_attribution else FORECAST_SLIDERS
 
-    st.divider()
-    st.subheader("Входные признаки")
-    values = {}
-    if is_attribution:
-        for key, (label, lo, hi, default) in sliders.items():
-            values[key] = st.slider(label, lo, hi, default, 0.05, key=key)
-    else:
-        for key, (label, lo, hi, default) in sliders.items():
-            values[key] = st.slider(label, lo, hi, default, 0.05, key=key)
-        hour = st.slider("Час суток", 0, 23, 12)
+values = {}
+with st.expander("Входные признаки", expanded=True):
+    cols = st.columns(2)  # на узком экране колонки встают в одну
+    for i, (key, (label, lo, hi, default)) in enumerate(sliders.items()):
+        values[key] = cols[i % 2].slider(label, lo, hi, default, 0.05, key=key)
+    if not is_attribution:
+        hour = cols[len(sliders) % 2].slider("Час суток", 0, 23, 12)
         values["hour_sin"] = math.sin(2 * math.pi * hour / 24)
         values["hour_cos"] = math.cos(2 * math.pi * hour / 24)
 
-    run = st.button("Запустить предсказание", use_container_width=True, type="primary")
+run = st.button("Запустить предсказание", use_container_width=True, type="primary")
 
 model = load_model(model_name)
 if model is None:
@@ -127,14 +133,14 @@ with col_main:
         st.metric("Уверенность модели", f"{confidence:.0%}")
 
         probs_df = pd.Series(probs, name="Вероятность").sort_values(ascending=False)
-        st.bar_chart(probs_df)
+        st.bar_chart(probs_df, horizontal=True)
 
         st.markdown("**Вклад признаков в вердикт**")
         drivers = model.top_drivers(vector, label, limit=5)
         drivers_df = pd.DataFrame(drivers).set_index("feature")["contribution"]
-        st.bar_chart(drivers_df)
+        st.bar_chart(drivers_df, horizontal=True)
     else:
-        st.info("Настройте признаки слева и нажмите «Запустить предсказание».")
+        st.info("Настройте признаки и нажмите «Запустить предсказание».")
 
 with col_stats:
     st.subheader("Качество модели")
