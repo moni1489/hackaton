@@ -24,7 +24,7 @@ from ..database import get_db
 from ..models import User
 from ..security import bearer, require_roles, write_audit
 from ..services.demo import engine, scenario
-from ..services.demo.engine import DemoError, hub, store
+from ..services.demo.engine import DemoError
 from ..services.ml import attribution, forecast
 
 log = logging.getLogger("demo.api")
@@ -88,7 +88,7 @@ def _operator_action(request: Request, db: Session, user: User, action: str, sid
         raise _fail(exc) from exc
     target = sid or result
     write_audit(db, user.email, user.role, f"demo.{action}", target, _ip(request), details or {})
-    from_thread.run(hub.refresh, target)   # зрители этого процесса узнают сразу, не ждут цикла
+    from_thread.run(engine.hub.refresh, target)   # зрители этого процесса узнают сразу, не ждут цикла
     return result
 
 
@@ -130,7 +130,7 @@ def config():
 @router.get("/health", summary="Готовность демонстрации")
 def health():
     attr, fcst = attribution.model(), forecast.model()
-    return {"ok": True, "store": store.backend(), "sessions": len(store.ids()),
+    return {"ok": True, "store": engine.store.backend(), "sessions": len(engine.store.ids()),
             "models": {"attribution": bool(attr), "forecast": bool(fcst)},
             "scenario_ready": scenario.ML_RUNS > 0}
 
@@ -151,8 +151,8 @@ def create_session(body: CreateBody, request: Request, db: Session = Depends(get
 def list_sessions(user: User = Depends(operator)):
     _throttle(f"demo:opr:{user.id}", settings.DEMO_RATE_LIMIT_OPERATOR * 4)
     out = []
-    for sid in store.ids():
-        doc = store.load(sid)
+    for sid in engine.store.ids():
+        doc = engine.store.load(sid)
         if doc:
             out.append({"id": sid, "title": doc["title"], "stage": doc["stage"], "run": doc["run"],
                         "created_at": doc["created_at"]})
@@ -251,7 +251,7 @@ async def live_state(sid: str = SID, who: str = Depends(viewer)):
     got = await asyncio.to_thread(engine.view_json, sid)
     if got is None:
         raise HTTPException(404, "Демонстрация завершена")
-    hub.touch(sid, who)
+    engine.hub.touch(sid, who)
     return _json(engine.stamp(got[1]))
 
 
@@ -261,18 +261,18 @@ def _frame(payload: str) -> str:
 
 @router.get("/live/{sid}/stream", summary="Поток изменений (Server-Sent Events)")
 async def live_stream(sid: str = SID, who: str = Depends(viewer)):
-    if hub.count() >= settings.DEMO_MAX_VIEWERS:
+    if engine.hub.count() >= settings.DEMO_MAX_VIEWERS:
         raise HTTPException(503, "Слишком много подключений, попробуйте позже")
-    queue = hub.subscribe(sid)               # сначала подписка, потом чтение: изменение не потеряется
+    queue = engine.hub.subscribe(sid)               # сначала подписка, потом чтение: изменение не потеряется
     try:
         got = await asyncio.to_thread(engine.view_json, sid)
     except BaseException:
-        hub.unsubscribe(sid, queue)
+        engine.hub.unsubscribe(sid, queue)
         raise
     if got is None:
-        hub.unsubscribe(sid, queue)
+        engine.hub.unsubscribe(sid, queue)
         raise HTTPException(404, "Демонстрация завершена")
-    hub.touch(sid, who)
+    engine.hub.touch(sid, who)
 
     async def events():
         try:
@@ -282,16 +282,16 @@ async def live_stream(sid: str = SID, who: str = Depends(viewer)):
                 try:
                     item = await asyncio.wait_for(queue.get(), engine.HEARTBEAT_SEC)
                 except asyncio.TimeoutError:
-                    hub.touch(sid, who)
+                    engine.hub.touch(sid, who)
                     yield ": ping\n\n"      # держит соединение и подтверждает присутствие зрителя
                     continue
                 if item is None:
                     yield "event: closed\ndata: {}\n\n"
                     return
-                hub.touch(sid, who)
+                engine.hub.touch(sid, who)
                 yield _frame(item)
         finally:
-            hub.unsubscribe(sid, queue)
+            engine.hub.unsubscribe(sid, queue)
 
     return StreamingResponse(events(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache, no-transform",
