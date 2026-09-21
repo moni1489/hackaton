@@ -8,6 +8,7 @@ venv/
 # Node
 node_modules/
 dist/
+build/
 .vite/
 
 # Локальные данные агента и демо-БД

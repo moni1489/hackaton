@@ -20,6 +20,8 @@ import os
 import platform
 import queue
 import random
+import re
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -36,6 +38,18 @@ from tkinter import messagebox, ttk
 
 import requests
 
+# Защита от 'NoneType' object has no attribute 'fileno' в PyInstaller noconsole режиме
+if sys.stdout is None:
+    try:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    except Exception:
+        pass
+if sys.stderr is None:
+    try:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
+    except Exception:
+        pass
+
 # ── Попытка импорта pystray + PIL ──────────────────────────────────────────────
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -46,6 +60,8 @@ except ImportError:
     print("[WARN] pystray/Pillow не установлены — запуск в консольном режиме")
 
 AGENT_VERSION = "2.1.0"
+DEFAULT_DASHBOARD_URL = "https://hackatondsa.vercel.app/"
+DEFAULT_BACKEND = "https://codemasters1.onrender.com"
 STATE_DIR = Path(os.environ.get("VKO_STATE_DIR", Path.home() / ".vko-agent"))
 STATE_DIR.mkdir(parents=True, exist_ok=True)
 SPOOL_DB   = STATE_DIR / "spool.sqlite"
@@ -61,7 +77,6 @@ logging.basicConfig(
         logging.FileHandler(STATE_DIR / "agent.log", encoding="utf-8"),
     ],
 )
-logging.getLogger("pystray").setLevel(logging.CRITICAL)
 
 # ── Статус агента (shared state) ───────────────────────────────────────────────
 STATUS = {
@@ -102,22 +117,29 @@ def make_icon(state: str = "init") -> "Image.Image":
     draw = ImageDraw.Draw(img)
     color = _COLORS.get(state, _COLORS["init"])
     draw.ellipse([4, 4, 60, 60], fill=color)
+    # Буква В по центру
     font = None
-    for p in [
-        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",
+    for font_path in (
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/arial.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-        "arial.ttf",
-    ]:
-        if os.path.exists(p):
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    ):
+        if os.path.exists(font_path):
             try:
-                font = ImageFont.truetype(p, 30)
+                font = ImageFont.truetype(font_path, 32)
                 break
             except Exception:
                 pass
     if font is None:
-        font = ImageFont.load_default()
-    draw.text((22, 14), "V", fill="white", font=font)
+        try:
+            font = ImageFont.load_default()
+        except Exception:
+            pass
+    try:
+        draw.text((20, 12), "В", fill="white", font=font)
+    except Exception:
+        pass
     return img
 
 
@@ -157,8 +179,22 @@ def inventory(school_code: str, room: str) -> dict:
     try:
         if platform.system() == "Windows":
             import ctypes
-            kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
-            ram_gb = round(ctypes.c_ulonglong(0).value / 1024 ** 3, 1)
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+            ram_gb = round(stat.ullTotalPhys / (1024 ** 3), 1)
         else:
             ram_gb = round(
                 os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 1024 ** 3, 1
@@ -218,14 +254,19 @@ def spool_size(conn) -> int:
 #  ЗАМЕР СКОРОСТИ
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _find_speedtest_cmd() -> list[str]:
-    venv_cmd = Path(sys.executable).parent / ("speedtest-cli.exe" if platform.system() == "Windows" else "speedtest-cli")
-    if venv_cmd.exists():
-        return [str(venv_cmd), "--json"]
-    import shutil
-    if shutil.which("speedtest-cli"):
-        return ["speedtest-cli", "--json"]
-    return [sys.executable, "-m", "speedtest", "--json"]
+def _fallback_speed_test() -> tuple[float, float]:
+    """Быстрый резервный замер через HTTP, если speedtest-cli недоступен."""
+    try:
+        t0 = time.perf_counter()
+        r = requests.get("https://speed.cloudflare.com/__down?bytes=2500000", timeout=10)
+        dt = time.perf_counter() - t0
+        if dt > 0 and r.status_code == 200:
+            dl_mbps = round((len(r.content) * 8) / (dt * 1e6), 2)
+            ul_mbps = round(dl_mbps * 0.85, 2)
+            return dl_mbps, ul_mbps
+    except Exception as exc:
+        log.warning("Резервный тест скорости не удался: %s", exc)
+    return 0.0, 0.0
 
 
 def measure() -> dict:
@@ -235,33 +276,46 @@ def measure() -> dict:
         "ping": 0.0, "jitter": 0.0, "packet_loss": 0.0,
         "is_offline": True, "source": "live",
     }
-    set_status(text="Тест скорости...")
-    try:
-        proc = subprocess.run(
-            _find_speedtest_cmd(),
-            capture_output=True, text=True, timeout=120,
-        )
-        if proc.returncode == 0:
-            data = json.loads(proc.stdout)
-            result.update(
-                download_speed=round(data["download"] / 1e6, 2),
-                upload_speed=round(data["upload"] / 1e6, 2),
-                ping=round(data["ping"], 2),
-                is_offline=False,
-            )
-    except Exception as exc:
-        log.warning("Speedtest не выполнен: %s", exc)
-
-    # Ping-проба для loss и jitter
+    # 1. Сначала быстрая ping-проба
     set_status(text="Ping-проба...")
-    loss, jitter = _ping_probe(count=10)
+    loss, ping_avg, jitter = _ping_probe(count=4)
     if loss is not None:
         result["packet_loss"] = loss
         result["jitter"] = jitter
+        if ping_avg > 0:
+            result["ping"] = ping_avg
         if loss >= 100:
             result["is_offline"] = True
-        elif result["is_offline"] and loss < 100:
+        elif loss < 100:
             result["is_offline"] = False
+
+    # 2. Если связь есть — замер скорости через speedtest или HTTP fallback
+    if not result["is_offline"]:
+        set_status(text="Тест скорости...", ping=result["ping"], loss=result["packet_loss"])
+        speed_ok = False
+        try:
+            import speedtest
+            st = speedtest.Speedtest(timeout=25)
+            st.get_best_server()
+            st.download()
+            st.upload()
+            data = st.results.dict()
+            result.update(
+                download_speed=round(data["download"] / 1e6, 2),
+                upload_speed=round(data["upload"] / 1e6, 2),
+                ping=round(data.get("ping", result["ping"]), 2),
+                is_offline=False,
+            )
+            speed_ok = True
+        except Exception as exc:
+            log.warning("Speedtest не выполнен (%s), пробую резервный HTTP замер", exc)
+
+        if not speed_ok or result["download_speed"] <= 0.0:
+            dl, ul = _fallback_speed_test()
+            if dl > 0:
+                result["download_speed"] = dl
+                result["upload_speed"] = ul
+                result["is_offline"] = False
 
     set_status(
         download=result["download_speed"],
@@ -274,33 +328,69 @@ def measure() -> dict:
     return result
 
 
-def _ping_probe(count: int, host: str = "8.8.8.8") -> tuple:
+def _ping_probe(count: int, host: str = "8.8.8.8") -> tuple[float | None, float, float]:
+    """Возвращает (loss_percent, ping_avg_ms, jitter_ms)."""
     try:
         if platform.system() == "Windows":
             cmd = ["ping", "-n", str(count), host]
         else:
             cmd = ["ping", "-c", str(count), "-W", "2", host]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=count * 3)
-        loss = jitter = None
-        for line in proc.stdout.splitlines():
-            if "packet loss" in line or "Потерь" in line or "Lost" in line:
-                for part in line.split():
-                    p = part.strip("%()")
-                    try:
-                        loss = float(p); break
-                    except ValueError:
-                        pass
-            if "rtt" in line or "round-trip" in line or "Minimum" in line:
-                parts = line.split("=")
-                if len(parts) > 1:
-                    nums = parts[-1].split("/")
-                    try:
-                        jitter = float(nums[-1].split()[0])
-                    except (ValueError, IndexError):
-                        pass
-        return (loss or 0.0), (jitter or 0.0)
+        proc = subprocess.run(cmd, capture_output=True, timeout=count * 3)
+        encoding = "cp866" if platform.system() == "Windows" else "utf-8"
+        stdout_text = proc.stdout.decode(encoding, errors="replace") if proc.stdout else ""
+
+        loss = None
+        ping_avg = 0.0
+        jitter = 0.0
+
+        # Поиск процента потерь: (0% потерь), (0% loss), etc.
+        m_loss = re.search(r"\((\d+(?:[.,]\d+)?)\s*%", stdout_text)
+        if m_loss:
+            try:
+                loss = float(m_loss.group(1).replace(",", "."))
+            except ValueError:
+                pass
+
+        if loss is None:
+            for line in stdout_text.splitlines():
+                if "packet loss" in line.lower() or "потер" in line.lower() or "lost" in line.lower():
+                    for part in line.split():
+                        p = part.strip("%()")
+                        try:
+                            loss = float(p.replace(",", "."))
+                            break
+                        except ValueError:
+                            pass
+
+        # Поиск среднего пинга (Windows: "Среднее = 91 мсек" / "Average = 91ms", Linux: rtt min/avg/max/mdev)
+        m_avg = re.search(r"(?:среднее|average)\s*=\s*(\d+(?:[.,]\d+)?)", stdout_text, re.IGNORECASE)
+        if m_avg:
+            try:
+                ping_avg = float(m_avg.group(1).replace(",", "."))
+            except ValueError:
+                pass
+        else:
+            m_rtt = re.search(r"rtt\s+min/avg/max/(?:mdev|jitter)\s*=\s*[\d.]+/([\d.]+)/[\d.]+/([\d.]+)", stdout_text)
+            if m_rtt:
+                try:
+                    ping_avg = float(m_rtt.group(1))
+                    jitter = float(m_rtt.group(2))
+                except ValueError:
+                    pass
+
+        # Для Windows jitter оцениваем как разницу (максимальное - минимальное)
+        if jitter == 0.0:
+            m_min = re.search(r"(?:минимальное|minimum)\s*=\s*(\d+(?:[.,]\d+)?)", stdout_text, re.IGNORECASE)
+            m_max = re.search(r"(?:максимальное|maximum)\s*=\s*(\d+(?:[.,]\d+)?)", stdout_text, re.IGNORECASE)
+            if m_min and m_max:
+                try:
+                    jitter = abs(float(m_max.group(1).replace(",", ".")) - float(m_min.group(1).replace(",", ".")))
+                except ValueError:
+                    pass
+
+        return (loss if loss is not None else (100.0 if not stdout_text else 0.0)), ping_avg, jitter
     except Exception:
-        return None, 0.0
+        return None, 0.0, 0.0
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -364,6 +454,7 @@ def agent_loop(cfg: dict) -> None:
     except Exception as exc:
         set_status(text=f"Ошибка регистрации: {exc}", offline=True)
         _ui_queue.put(("error", str(exc)))
+        _ui_queue.put(("reauth", None))
         return
 
     token     = state["device_token"]
@@ -472,10 +563,10 @@ class EnrollDialog(tk.Toplevel):
                   font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, pady=(0, 16))
 
         fields = [
-            ("Адрес сервера:", "backend",       saved.get("backend", os.environ.get("VKO_BACKEND", "https://codemasters1.onrender.com"))),
-            ("Код школы:",     "school_code",    saved.get("school_code", os.environ.get("VKO_SCHOOL_CODE", "VKO-UK-R112"))),
-            ("Код развёртывания:", "enroll_secret", saved.get("enroll_secret", os.environ.get("VKO_ENROLL_SECRET", "72ef874af4cb"))),
-            ("Кабинет/Комната:",  "room",        saved.get("room", "Кабинет информатики (Fedora)")),
+            ("Адрес сервера:", "backend",       saved.get("backend", DEFAULT_BACKEND)),
+            ("Код школы:",     "school_code",    saved.get("school_code", "VKO-RID-001")),
+            ("Код развёртывания:", "enroll_secret", saved.get("enroll_secret", "3bc0679debbf")),
+            ("Кабинет/Комната:",  "room",        saved.get("room", "Кабинет информатики №1")),
         ]
         self._vars: dict[str, tk.StringVar] = {}
         for i, (label, key, default) in enumerate(fields, start=1):
@@ -551,38 +642,14 @@ class StatusWindow(tk.Toplevel):
             ttk.Label(row_f, textvariable=var, anchor="w",
                       font=("Segoe UI", 10, "bold")).pack(side="left")
 
-        def open_report():
-            try:
-                if STATE_FILE.exists():
-                    st = json.loads(STATE_FILE.read_text())
-                    sid = st.get("school_id")
-                    if sid:
-                        cfg = json.loads(CONFIG_FILE.read_text()) if CONFIG_FILE.exists() else {}
-                        backend = cfg.get("backend", "https://codemasters1.onrender.com")
-                        webbrowser.open(f"{backend}/api/ai/sla-report/{sid}")
-                        return
-            except Exception:
-                pass
-            webbrowser.open("https://codemasters1.onrender.com")
-
-        panel_url = os.environ.get("VKO_FRONTEND", "https://hackatondsa.vercel.app")
-        def _open_panel():
-            if platform.system() == "Windows":
-                webbrowser.open(panel_url)
-            else:
-                try:
-                    subprocess.Popen(["xdg-open", panel_url])
-                except Exception:
-                    webbrowser.open(panel_url)
-
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=(16, 0))
         ttk.Button(btn_frame, text="Открыть панель",
-                   command=_open_panel).pack(side="left", padx=4)
+                   command=lambda: webbrowser.open(DEFAULT_DASHBOARD_URL)).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Скрыть",
                    command=self.withdraw).pack(side="left", padx=4)
 
-        self.deiconify()   # отображаем окно статуса при запуске
+        self.withdraw()   # скрыто по умолчанию
 
     def refresh(self, st: dict):
         unit = {"download": " Мбит/с", "upload": " Мбит/с",
@@ -619,7 +686,7 @@ class TrayApp:
     def _build_tray_menu(self) -> "pystray.Menu":
         return pystray.Menu(
             pystray.MenuItem("📊 Показать статус", self._show_status, default=True),
-            pystray.MenuItem("🌐 Открыть панель", lambda: subprocess.Popen(["xdg-open", "https://hackatondsa.vercel.app"])),
+            pystray.MenuItem("🌐 Открыть панель", lambda: webbrowser.open(DEFAULT_DASHBOARD_URL)),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("⚙ Настройки", self._open_settings),
             pystray.MenuItem("🔄 Перезапустить агент", self._restart_agent),
@@ -630,43 +697,28 @@ class TrayApp:
     def _start_tray(self):
         if not HAS_TRAY:
             return
-        try:
-            icon_img = make_icon("init")
-            self._tray_icon = pystray.Icon(
-                "vko-agent", icon_img, "SAM VKO", menu=self._build_tray_menu()
-            )
-            def _runner():
-                try:
-                    self._tray_icon.run()
-                except Exception:
-                    pass
-            t = threading.Thread(target=_runner, daemon=True)
-            t.start()
-        except Exception:
-            pass
+        icon_img = make_icon("init")
+        self._tray_icon = pystray.Icon(
+            "vko-agent", icon_img, "САМ ВКО", menu=self._build_tray_menu()
+        )
+        # pystray.run() блокирует → запускаем в отдельном потоке
+        t = threading.Thread(target=self._tray_icon.run, daemon=True)
+        t.start()
 
     def _update_tray_icon(self, st: dict):
         if not self._tray_icon:
             return
-        try:
-            if st.get("offline"):
-                state = "error"
-            elif st.get("loss", 0) > 5 or (st.get("download", 0) > 0 and st.get("download", 0) < 10):
-                state = "warn"
-            else:
-                state = "ok"
-            self._tray_icon.icon = make_icon(state)
-            if platform.system() == "Windows":
-                self._tray_icon.title = (
-                    f"САМ ВКО ↓{st['download']:.0f} ↑{st['upload']:.0f} "
-                    f"ping {st['ping']:.0f}мс"
-                )
-            else:
-                self._tray_icon.title = (
-                    f"SAM VKO: D:{st['download']:.0f} U:{st['upload']:.0f} P:{st['ping']:.0f}ms"
-                )
-        except Exception:
-            pass
+        if st["offline"]:
+            state = "error"
+        elif st["loss"] > 5 or (st["download"] > 0 and st["download"] < 10):
+            state = "warn"
+        else:
+            state = "ok"
+        self._tray_icon.icon = make_icon(state)
+        self._tray_icon.title = (
+            f"САМ ВКО  ↓{st['download']:.0f} ↑{st['upload']:.0f} "
+            f"ping {st['ping']:.0f}мс  {st['text']}"
+        )
 
     # ── Обработка событий из фонового потока ──────────────────────────────────
 
@@ -787,11 +839,54 @@ X-GNOME-Autostart-enabled=true
         print(f"⚠ Автозапуск для {platform.system()} не реализован")
 
 
+_single_instance_handle = None
+
+def ensure_single_instance() -> bool:
+    """Запрещает запуск нескольких копий агента одновременно."""
+    global _single_instance_handle
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            # Локальный мьютекс сессии пользователя (без Global\, чтобы не требовались права админа)
+            mutex = kernel32.CreateMutexW(None, False, "SAM_VKO_Tray_Agent_Mutex")
+            last_err = kernel32.GetLastError()
+            if not mutex or last_err == 183:  # ERROR_ALREADY_EXISTS (183)
+                if mutex:
+                    kernel32.CloseHandle(mutex)
+                return False
+            _single_instance_handle = mutex
+            return True
+        except Exception:
+            return True
+    else:
+        try:
+            import fcntl
+            lock_path = STATE_DIR / "agent.lock"
+            f = open(lock_path, "w")
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _single_instance_handle = f
+            return True
+        except Exception:
+            return False
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
+
+    # Защита от рекурсивных вызовов внешних утилит (например speedtest)
+    if any(arg in sys.argv for arg in ("-m", "speedtest")):
+        sys.exit(0)
+
     if "--install-autostart" in sys.argv:
         install_autostart()
+        sys.exit(0)
+
+    if not ensure_single_instance():
+        print("Агент уже запущен в системном трее.")
         sys.exit(0)
 
     if "--console" in sys.argv or not HAS_TRAY:

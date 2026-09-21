@@ -19,7 +19,7 @@ IS_WINDOWS = sys.platform == "win32"
 
 a = Analysis(
     ['tray_agent.py'],
-    pathex=[str(Path(__file__).parent)],
+    pathex=[SPECPATH],
     binaries=[],
     datas=[],
     hiddenimports=[
