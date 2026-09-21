@@ -24,7 +24,7 @@ from ..services.predictive import analyze, region_overview
 from ..services.smart_sync import stats as sync_stats
 from ..services.status import (
     ALL_STATUSES, STATUS_NO_DATA, STATUS_OFFLINE, effective_status, freshness, is_fresh,
-    naive_utc, thresholds,
+    last_measured, naive_utc, thresholds,
 )
 
 router = APIRouter(prefix="/api/web", tags=["Web API"])
@@ -141,7 +141,7 @@ def overview(as_of: datetime | None = None, db: Session = Depends(get_db),
         counts[key_map[eff[s.id]]] += 1
 
     with_data = len(schools) - counts["no_data"]
-    last = max((s.last_measurement for s in schools if s.last_measurement), default=None)
+    last = last_measured(db, None if user.role in FULL_SCOPE_ROLES else ids)
     payload = {
         "total_schools": len(schools),
         "total_devices": len(device_rows),

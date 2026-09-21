@@ -8,7 +8,6 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -16,7 +15,7 @@ from ..models import Device, FaultEvent, Incident, School, User
 from ..security import (
     FULL_SCOPE_ROLES, can_access_school, current_user, require_roles, scope_schools, write_audit,
 )
-from ..services.status import freshness, naive_utc
+from ..services.status import freshness, last_measured, naive_utc
 from ..services.ml import attribution, baseline, forecast
 from ..services.ml.features import CAUSES, CAUSE_LABELS, CAUSE_OWNER
 from ..services.ml.train import train_models
@@ -49,11 +48,8 @@ def summary(as_of: datetime | None = None, db: Session = Depends(get_db),
     означает «нет данных», а не «отклонений нет»."""
     now = _now(as_of)
     ids = _visible(db, user)
-    last = db.query(func.max(School.last_measurement))
-    if ids is not None:
-        last = last.filter(School.id.in_(ids or [-1]))
     return {**attribution.cause_summary(db, school_ids=ids, now=now),
-            "freshness": {**freshness(last.scalar(), now),
+            "freshness": {**freshness(last_measured(db, ids), now),
                           "mode": "history" if as_of else "live"}}
 
 

@@ -3,6 +3,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..config import settings
@@ -161,3 +162,13 @@ def freshness(last: datetime | None, now: datetime, th: Thresholds | None = None
             "age_min": None if last is None else max(0, int((now - last).total_seconds() // 60)),
             "stale_after_min": th.stale_after_min,
             "is_stale": not is_fresh(last, now, th)}
+
+
+def last_measured(db, school_ids: list[int] | None = None) -> datetime | None:
+    """Время самого свежего замера в таблице измерений (None-список школ — вся область).
+    Берётся из измерений, а не из School.last_measurement: это факт, а не копия статуса."""
+    from ..models import Measurement
+    query = db.query(func.max(Measurement.timestamp))
+    if school_ids is not None:
+        query = query.filter(Measurement.school_id.in_(school_ids or [-1]))
+    return query.scalar()
