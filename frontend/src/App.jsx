@@ -5,6 +5,7 @@ import { Spark } from './Charts';
 import DeviceDrawer from './DeviceDrawer';
 import Login from './Login';
 import MapView from './MapView';
+import DemoPanel from './DemoControl';
 import DiagnosticsPage from './Diagnostics';
 import PublicDataPage from './PublicData';
 import RatingPage from './Rating';
@@ -26,12 +27,15 @@ const NAV = [
   { key: 'public-data', label: 'Открытые данные', Icon: IcoLayers },
   { key: 'incidents', label: 'Инциденты', Icon: IcoAlert },
   { key: 'admin', label: 'Управление', Icon: IcoGear },
+  { key: 'demo', label: 'Демонстрация', Icon: IcoPulse },
 ];
+const OPERATOR_ONLY = ['admin', 'demo'];
 
 const TITLES = {
   'public-data': 'Открытые данные и внешняя проверка',
   map: 'Мониторинг', schools: 'Школы', rating: 'Рейтинг организаций', devices: 'ПК-агенты',
   diagnostics: 'Диагностика · кто виноват', incidents: 'Инциденты', admin: 'Управление',
+  demo: 'Демонстрация для зала',
 };
 
 const ROLE_LABEL = {
@@ -56,7 +60,8 @@ export default function App() {
 }
 
 function Dashboard({ user, onLogout }) {
-  const [view, setView] = useState('map');
+  // /demo открывает то же приложение сразу на вкладке демонстрации.
+  const [view, setView] = useState(() => (window.location.pathname === '/demo' ? 'demo' : 'map'));
   const [overview, setOverview] = useState(null);
   const [schools, setSchools] = useState([]);
   const [incidents, setIncidents] = useState([]);
@@ -148,7 +153,7 @@ function Dashboard({ user, onLogout }) {
         </button>
 
         <nav className="nav">
-          {NAV.filter(({ key }) => key !== 'admin' || ['admin', 'operator'].includes(user?.role))
+          {NAV.filter(({ key }) => !OPERATOR_ONLY.includes(key) || ['admin', 'operator'].includes(user?.role))
             .map(({ key, label, Icon }) => (
             <button key={key} className={`nav-item ${view === key ? 'active' : ''}`}
               title={label} onClick={() => setView(key)}>
@@ -199,6 +204,13 @@ function Dashboard({ user, onLogout }) {
             title="Показать состояние на момент последнего замера в базе. Это не текущие данные.">
             <IcoClock size={15} />Демо истории
           </button>
+
+          {['admin', 'operator'].includes(user?.role) ? (
+            <button className="btn accent" style={{ flex: 'none' }} onClick={() => setView('demo')}
+              title="Создать сессию, показать QR-код залу и вести сценарий">
+              ▶ Запустить демо
+            </button>
+          ) : null}
 
           <div className="search">
             <IcoSearch size={15} style={{ color: 'var(--ink-3)' }} />
@@ -379,6 +391,7 @@ function Dashboard({ user, onLogout }) {
             onOpenSchool={openSchool} onReload={loadCore} />
         ) : null}
         {view === 'admin' ? <AdminPage role={user?.role} /> : null}
+        {view === 'demo' ? <DemoPanel role={user?.role} /> : null}
       </div>
 
       {schoolDrawer ? (
