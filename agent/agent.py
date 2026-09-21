@@ -4,11 +4,15 @@
 прослеживания качества связи.
 
 Особенности:
-  • регистрация по одноразовому коду школы, токен привязан к отпечатку железа;
-  • локальный спул (SQLite) — при обрыве связи замеры не теряются;
-  • выгрузка накопленного пакетом (Smart Sync) со случайным джиттером старта,
-    чтобы сотни агентов не ударили в сервер одновременно;
-  • интервал тестирования задаёт сервер (динамическая конфигурация).
+  • регистрация по коду развёртывания школы (постоянному, не одноразовому); токен
+    выдаётся под отпечаток оборудования. Привязку к железу гарантирует только mTLS;
+  • локальный спул (SQLite): при обрыве связи замеры копятся и уходят пакетами (Smart
+    Sync). Копия удаляется ТОЛЬКО после того, как сервер подтвердил запись пакета
+    (status=done), а не на ответе 202 — принятый пакет ещё может быть не записан;
+  • выгрузка со случайным джиттером старта, чтобы сотни агентов не ударили в сервер вместе;
+  • интервал тестирования задаёт сервер (динамическая конфигурация);
+  • точка мониторинга линии — VKO_DEVICE_TYPE=Шлюз (+ VKO_LINE_CODE / VKO_LINE_ROLE):
+    только она определяет статус школы; обычное рабочее место оценивается отдельно.
 """
 from __future__ import annotations
 
@@ -33,6 +37,9 @@ BACKEND_URL = os.environ.get("VKO_BACKEND", "https://codemasters1.onrender.com")
 SCHOOL_CODE = os.environ.get("VKO_SCHOOL_CODE", "VKO-RID-001")
 ENROLL_SECRET = os.environ.get("VKO_ENROLL_SECRET", "")
 ROOM = os.environ.get("VKO_ROOM", "Кабинет информатики №1")
+DEVICE_TYPE = os.environ.get("VKO_DEVICE_TYPE", "Рабочая станция")   # «Шлюз» — точка мониторинга линии
+LINE_CODE = os.environ.get("VKO_LINE_CODE")   # какую линию измеряет точка мониторинга
+LINE_ROLE = os.environ.get("VKO_LINE_ROLE")   # main | backup — если линию создаёт эта регистрация
 VERIFY_TLS = os.environ.get("VKO_VERIFY_TLS", "1") != "0"
 CLIENT_CERT = os.environ.get("VKO_CLIENT_CERT")   # путь к mTLS-сертификату (cert,key)
 STATE_DIR = Path(os.environ.get("VKO_STATE_DIR", Path.home() / ".vko-agent"))
@@ -84,8 +91,10 @@ def inventory() -> dict:
         "cpu_model": platform.processor() or platform.machine(),
         "ram_gb": ram_gb,
         "agent_version": AGENT_VERSION,
-        "device_type": "Рабочая станция",
+        "device_type": DEVICE_TYPE,
         "link_mode": "Ethernet 1 Гбит/с",
+        "line_code": LINE_CODE,
+        "line_role": LINE_ROLE,
     }
 
 
@@ -96,7 +105,10 @@ def spool_init() -> sqlite3.Connection:
     conn.execute("""CREATE TABLE IF NOT EXISTS pending (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         payload TEXT NOT NULL,
-        created_at TEXT NOT NULL)""")
+        created_at TEXT NOT NULL,
+        batch_id INTEGER)""")          # batch_id — пакет сервера, принявший строку (ждёт подтверждения)
+    if "batch_id" not in {row[1] for row in conn.execute("PRAGMA table_info(pending)")}:
+        conn.execute("ALTER TABLE pending ADD COLUMN batch_id INTEGER")   # спул старой версии
     conn.commit()
     return conn
 
@@ -108,17 +120,30 @@ def spool_add(conn: sqlite3.Connection, payload: dict) -> None:
 
 
 def spool_take(conn: sqlite3.Connection, limit: int) -> tuple[list[int], list[dict]]:
-    rows = conn.execute("SELECT id, payload FROM pending ORDER BY id LIMIT ?", (limit,)).fetchall()
+    """Строки, ещё не принятые сервером."""
+    rows = conn.execute("SELECT id, payload FROM pending WHERE batch_id IS NULL ORDER BY id LIMIT ?",
+                        (limit,)).fetchall()
     return [r[0] for r in rows], [json.loads(r[1]) for r in rows]
 
 
-def spool_drop(conn: sqlite3.Connection, ids: list[int]) -> None:
-    conn.executemany("DELETE FROM pending WHERE id = ?", [(i,) for i in ids])
+def spool_mark_sent(conn: sqlite3.Connection, ids: list[int], batch_id: int) -> None:
+    conn.executemany("UPDATE pending SET batch_id = ? WHERE id = ?", [(batch_id, i) for i in ids])
     conn.commit()
 
 
-def spool_size(conn: sqlite3.Connection) -> int:
-    return conn.execute("SELECT COUNT(*) FROM pending").fetchone()[0]
+def spool_release(conn: sqlite3.Connection, batch_id: int) -> None:
+    conn.execute("UPDATE pending SET batch_id = NULL WHERE batch_id = ?", (batch_id,))
+    conn.commit()
+
+
+def spool_drop_batch(conn: sqlite3.Connection, batch_id: int) -> None:
+    conn.execute("DELETE FROM pending WHERE batch_id = ?", (batch_id,))
+    conn.commit()
+
+
+def spool_size(conn: sqlite3.Connection, unsent_only: bool = False) -> int:
+    where = " WHERE batch_id IS NULL" if unsent_only else ""
+    return conn.execute(f"SELECT COUNT(*) FROM pending{where}").fetchone()[0]
 
 
 # --- HTTP ------------------------------------------------------------------
@@ -251,9 +276,38 @@ def run() -> None:
         time.sleep(max(30, int(interval * random.uniform(0.8, 1.2))))
 
 
+def confirm_sent(session: requests.Session, conn: sqlite3.Connection) -> None:
+    """Удаляет локальные копии ТОЛЬКО после подтверждения записи сервером (status=done).
+
+    202 значит «пакет принят», не «замеры записаны». Пока сервер не подтвердил — копия
+    остаётся; если он пакета не знает (404) — строки возвращаются в очередь на отправку.
+    """
+    batches = [row[0] for row in conn.execute(
+        "SELECT DISTINCT batch_id FROM pending WHERE batch_id IS NOT NULL")]
+    for batch_id in batches:
+        try:
+            response = session.get(f"{BACKEND_URL}/api/agent/measurements/batch/{batch_id}",
+                                   timeout=15)
+        except requests.RequestException:
+            return                       # связи нет — спросим в следующем цикле
+        if response.status_code == 404:
+            spool_release(conn, batch_id)
+        elif response.status_code == 200:
+            state = response.json()
+            if state.get("status") == "done":
+                spool_drop_batch(conn, batch_id)
+                log.info("Сервер подтвердил запись пакета %s", batch_id)
+            elif state.get("status") == "failed":
+                log.warning("Пакет %s пока не записан (%s) — копия сохранена, сервер повторит",
+                            batch_id, state.get("error"))
+
+
 def flush_spool(session: requests.Session, conn: sqlite3.Connection, config: dict) -> None:
     """Smart Sync: выгружает накопленное пакетами, уважая backpressure сервера."""
-    pending = spool_size(conn)
+    if not spool_size(conn):
+        return
+    confirm_sent(session, conn)
+    pending = spool_size(conn, unsent_only=True)
     if not pending:
         return
     log.info("Восстановлена связь. Выгружаю накопленные замеры: %s", pending)
@@ -261,7 +315,7 @@ def flush_spool(session: requests.Session, conn: sqlite3.Connection, config: dic
     time.sleep(random.uniform(0, 30))
 
     limit = min(config.get("batch_max_items", 2000), 500)
-    while spool_size(conn):
+    while spool_size(conn, unsent_only=True):
         ids, items = spool_take(conn, limit)
         try:
             response = session.post(f"{BACKEND_URL}/api/agent/measurements/batch",
@@ -270,9 +324,9 @@ def flush_spool(session: requests.Session, conn: sqlite3.Connection, config: dic
             log.warning("Выгрузка прервана: %s — повторю в следующем цикле", exc)
             return
         if response.status_code == 202:
-            spool_drop(conn, ids)
-            log.info("Пакет принят сервером: %s замеров, осталось %s",
-                     len(ids), spool_size(conn))
+            spool_mark_sent(conn, ids, response.json()["batch_id"])
+            log.info("Пакет принят сервером: %s замеров; копии хранятся до подтверждения записи",
+                     len(ids))
         elif response.status_code == 503:
             wait = int(response.headers.get("Retry-After", 120))
             log.warning("Сервер перегружен, повтор через %s с", wait)
