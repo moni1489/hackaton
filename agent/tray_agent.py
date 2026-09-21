@@ -567,7 +567,7 @@ class StatusWindow(tk.Toplevel):
 
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=(16, 0))
-        panel_url = os.environ.get("VKO_FRONTEND", "https://hackaton-eta-seven.vercel.app")
+        panel_url = os.environ.get("VKO_FRONTEND", "https://hackatondsa.vercel.app")
         ttk.Button(btn_frame, text="Открыть панель",
                    command=lambda: webbrowser.open(panel_url)).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Скрыть",
@@ -610,7 +610,7 @@ class TrayApp:
     def _build_tray_menu(self) -> "pystray.Menu":
         return pystray.Menu(
             pystray.MenuItem("📊 Показать статус", self._show_status, default=True),
-            pystray.MenuItem("🌐 Открыть панель", lambda: webbrowser.open("http://localhost:5173")),
+            pystray.MenuItem("🌐 Открыть панель", lambda: webbrowser.open(os.environ.get("VKO_FRONTEND", "https://hackatondsa.vercel.app"))),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("⚙ Настройки", self._open_settings),
             pystray.MenuItem("🔄 Перезапустить агент", self._restart_agent),
