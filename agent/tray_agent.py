@@ -454,7 +454,7 @@ class EnrollDialog(tk.Toplevel):
             ("Адрес сервера:", "backend",       saved.get("backend", os.environ.get("VKO_BACKEND", "https://codemasters1.onrender.com"))),
             ("Код школы:",     "school_code",    saved.get("school_code", os.environ.get("VKO_SCHOOL_CODE", "VKO-UK-R112"))),
             ("Код развёртывания:", "enroll_secret", saved.get("enroll_secret", os.environ.get("VKO_ENROLL_SECRET", "72ef874af4cb"))),
-            ("Кабинет/Комната:",  "room",        saved.get("room", "Кабинет информатики (Fedora)"))),
+            ("Кабинет/Комната:",  "room",        saved.get("room", "Кабинет информатики (Fedora)")),
         ]
         self._vars: dict[str, tk.StringVar] = {}
         for i, (label, key, default) in enumerate(fields, start=1):
