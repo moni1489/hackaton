@@ -101,12 +101,22 @@ def make_icon(state: str = "init") -> "Image.Image":
     draw = ImageDraw.Draw(img)
     color = _COLORS.get(state, _COLORS["init"])
     draw.ellipse([4, 4, 60, 60], fill=color)
-    # Буква В по центру
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
-    except Exception:
+    font = None
+    for p in [
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        "arial.ttf",
+    ]:
+        if os.path.exists(p):
+            try:
+                font = ImageFont.truetype(p, 30)
+                break
+            except Exception:
+                pass
+    if font is None:
         font = ImageFont.load_default()
-    draw.text((22, 14), "В", fill="white", font=font)
+    draw.text((22, 14), "V", fill="white", font=font)
     return img
 
 
@@ -587,7 +597,7 @@ class TrayApp:
             return
         icon_img = make_icon("init")
         self._tray_icon = pystray.Icon(
-            "vko-agent", icon_img, "САМ ВКО", menu=self._build_tray_menu()
+            "vko-agent", icon_img, "SAM VKO", menu=self._build_tray_menu()
         )
         # pystray.run() блокирует → запускаем в отдельном потоке
         t = threading.Thread(target=self._tray_icon.run, daemon=True)
