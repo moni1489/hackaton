@@ -41,6 +41,26 @@ def main_line(db, school_id: int) -> Line | None:
     return db.query(Line).filter(Line.school_id == school_id, Line.role == "main").first()
 
 
+def sync_from_monitors(db, line: Line, school: School) -> None:
+    """Состояние линии (и школы, если линия основная) — по её точке мониторинга.
+    Раньше школа считалась средним по всем ПК; теперь рабочие места в оценку канала не входят."""
+    latest = db.query(Device).filter(Device.line_id == line.id, Device.last_measured.isnot(None)) \
+        .order_by(Device.last_measured.desc()).first()
+    if not latest:
+        return
+    row = {"download_speed": latest.current_download or 0.0,
+           "upload_speed": latest.current_upload or 0.0,
+           "ping": latest.current_ping or 0.0, "jitter": latest.current_jitter or 0.0,
+           "packet_loss": latest.current_packet_loss or 0.0, "timestamp": latest.last_measured}
+    status = classify(row["download_speed"], row["ping"], row["packet_loss"],
+                      line.contract_speed_down, latest.status == "offline",
+                      upload=row["upload_speed"], jitter=row["jitter"],
+                      contract_up=line.contract_speed_up)
+    set_state(line, row, status)
+    if line.role == "main":
+        set_state(school, row, status)
+
+
 def ensure_defaults(db) -> None:
     """Стартовая версия порогов и основная линия у каждой школы. Идемпотентно."""
     if not db.query(Threshold.id).first():
@@ -61,23 +81,9 @@ def ensure_defaults(db) -> None:
                     contract_speed_up=school.contract_speed_up)
         db.add(line)
         db.flush()
-        gateways = db.query(Device).filter(Device.school_id == school.id,
-                                           Device.device_type == "Шлюз").all()
-        for gateway in gateways:
+        for gateway in db.query(Device).filter(Device.school_id == school.id,
+                                               Device.device_type == "Шлюз"):
             gateway.line_id = line.id
-        # Состояние линии и школы — по шлюзу (раньше школа считалась средним по всем ПК).
-        latest = max((g for g in gateways if g.last_measured), key=lambda g: g.last_measured,
-                     default=None)
-        if latest:
-            row = {"download_speed": latest.current_download or 0.0,
-                   "upload_speed": latest.current_upload or 0.0,
-                   "ping": latest.current_ping or 0.0, "jitter": latest.current_jitter or 0.0,
-                   "packet_loss": latest.current_packet_loss or 0.0,
-                   "timestamp": latest.last_measured}
-            status = classify(row["download_speed"], row["ping"], row["packet_loss"],
-                              line.contract_speed_down, latest.status == "offline",
-                              upload=row["upload_speed"], jitter=row["jitter"],
-                              contract_up=line.contract_speed_up)
-            set_state(line, row, status)
-            set_state(school, row, status)
+        db.flush()
+        sync_from_monitors(db, line, school)
     db.commit()

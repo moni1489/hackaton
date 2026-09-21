@@ -82,10 +82,15 @@ def sla_report(analysis: dict, school: dict, incidents: list[dict],
               table([
                   ["Показатель", "Факт", "Норматив", "Оценка"],
                   ["Средняя скорость загрузки", f"{analysis['avg_speed']} Мбит/с",
-                   f"≥ {round(analysis['contract_speed'] * 0.6, 1)} Мбит/с",
-                   "нарушение" if analysis["avg_speed"] < analysis["contract_speed"] * 0.6 else "норма"],
-                  ["Соответствие SLA", f"{analysis['sla_compliance_pct']}%", "≥ 95%",
+                   f"≥ {analysis['speed_floor']} Мбит/с",
+                   "нарушение" if analysis["avg_speed"] < analysis["speed_floor"] else "норма"],
+                  ["Доля замеров в пределах порогов", f"{analysis['sla_compliance_pct']}%", "≥ 95%",
                    "нарушение" if analysis["sla_compliance_pct"] < 95 else "норма"],
+                  ["Доступность соединения", f"{analysis['availability_pct']}%",
+                   f"≥ {analysis['availability_norm_pct']:g}%",
+                   "норма" if analysis["availability_ok"] else "нарушение"],
+                  ["Замеров ниже договорной доли", f"{analysis['below_contract_pct']}%",
+                   f"< {analysis['sla_threshold_pct']}% договора", "—"],
                   ["Замеров за период", str(analysis["samples"]),
                    f"{analysis['window_days']} сут.", "—"],
                   ["Зафиксировано отклонений", str(analysis["violations"]), "0", "—"],
@@ -106,33 +111,39 @@ def sla_report(analysis: dict, school: dict, incidents: list[dict],
     else:
         story.append(Paragraph("Устойчивых повторяющихся паттернов не выявлено.", body))
 
-    # --- Заключение об источнике: доказательная часть претензии ----------
-    story.append(Paragraph("4. Заключение об источнике нарушения", h2))
-    if verdict and verdict.get("cause") and verdict["cause"] != "none":
+    # --- Предполагаемый источник: гипотеза, а не установленный факт --------
+    story.append(Paragraph("4. Предполагаемый источник нарушения", h2))
+    if verdict and verdict.get("cause") and verdict["cause"] not in ("none", "no_data", "undetermined"):
         evidence = verdict.get("evidence", {})
+        quality = verdict.get("data_quality", {})
         story.append(table([
-            ["Установленный источник", verdict.get("cause_label", "—")],
+            ["Предполагаемый источник", verdict.get("cause_label", "—")],
             ["Зона ответственности", verdict.get("responsible", "—")],
-            ["Уверенность модели", f"{round(float(verdict.get('confidence', 0)) * 100)}%"],
+            ["Оценка модели", f"{round(float(verdict.get('confidence', 0)) * 100)}% "
+                              "(не является доказанной вероятностью)"],
+            ["Достаточность данных", quality.get("label", "—")],
             ["ПК организации в отклонении",
              f"{evidence.get('devices_affected', 0)} из {evidence.get('devices_total', 0)}"],
-            ["Школы того же провайдера в районе",
+            ["Сопоставимые школы того же провайдера в районе",
              f"{evidence.get('peers_same_provider_district_affected', 0)} из "
              f"{evidence.get('peers_same_provider_district', 0)} в отклонении"],
-            ["Школы других провайдеров в районе",
-             f"{evidence.get('peers_other_providers_district_affected_pct', 0)}% в отклонении"],
+            ["Сопоставимые школы других провайдеров в районе",
+             f"{evidence.get('peers_other_providers_district_affected_pct', 0)}% в отклонении "
+             f"({evidence.get('peers_other_providers_district', 0)} школ)"],
             ["Средняя просадка к норме канала", f"{evidence.get('avg_depth_pct', 0)}%"],
             ["Модель атрибуции", verdict.get("model_version", "—")],
         ], [70 * mm, 104 * mm]))
+        limits = "; ".join(quality.get("reasons", []))
         story += [Spacer(1, 6), Paragraph(verdict.get("narrative", ""), body), Spacer(1, 4),
-                  Paragraph("Вывод получен сопоставлением показателей независимых агентов в "
-                            "разных организациях образования: граница зоны отклонения "
-                            "устанавливается по объективным данным, а не по показаниям одной "
-                            "точки измерения.", body)]
+                  Paragraph("Вывод основан на сопоставлении показателей агентов в других "
+                            "организациях образования. Совпадение границы отклонения сужает круг "
+                            "возможных причин, но не доказывает конкретную; окончательный вывод "
+                            "делается после проверки на месте."
+                            + (f" Ограничения данных: {limits}." if limits else ""), body)]
     else:
-        story.append(Paragraph("Источник нарушения автоматической атрибуцией не установлен: "
-                               "на момент формирования акта синхронных отклонений у "
-                               "сопоставимых организаций не зафиксировано.", body))
+        story.append(Paragraph("Источник нарушения автоматической атрибуцией не установлен"
+                               + (": " + verdict["narrative"] if verdict and verdict.get("narrative")
+                                  else ": данных недостаточно") + ".", body))
 
     story += [Paragraph("5. Прогноз системы предиктивной аналитики", h2),
               Paragraph(analysis["forecast"] or "—", body)]

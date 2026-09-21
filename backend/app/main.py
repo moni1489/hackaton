@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from .cache import backend_name
 from .config import settings
 from .database import SessionLocal, engine, migrate_schema
-from .routers import admin, agent, ai, auth, ml, web, public_data
+from .routers import admin, agent, ai, auth, export, ml, web, public_data
 from .services.external_network import poll_sources
 from .services.lines import ensure_defaults
 from .services.smart_sync import start_workers, stats, stop_workers
@@ -92,6 +92,7 @@ async def unhandled(request: Request, exc: Exception):
 app.include_router(auth.router)
 app.include_router(agent.router)
 app.include_router(web.router)
+app.include_router(export.router)
 app.include_router(admin.router)
 app.include_router(ai.router)
 app.include_router(ml.router)

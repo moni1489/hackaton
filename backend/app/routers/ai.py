@@ -1,6 +1,6 @@
 """Integration / AI API — досудебные претензии и PDF-акты о нарушении SLA."""
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
@@ -12,6 +12,7 @@ from ..security import can_access_school, current_user, require_roles, write_aud
 from ..services.ml import attribution, forecast as ml_forecast
 from ..services.predictive import analyze
 from ..services.reports import sla_report
+from ..services.status import naive_utc, thresholds
 from ..routers.web import school_brief
 
 log = logging.getLogger("ai")
@@ -40,22 +41,32 @@ def _genai():
 
 
 def _verdict_block(verdict: dict | None) -> str:
-    """Заключение об источнике — то, чем претензия отличается от жалобы «медленно»."""
-    if not verdict or verdict.get("cause") in (None, "none"):
+    """Предполагаемый источник — то, чем претензия отличается от жалобы «медленно».
+    Гипотеза автоматической атрибуции: в тексте она не выдаётся за установленный факт."""
+    if not verdict or verdict.get("cause") in (None, "none", "no_data", "undetermined"):
         return ""
     evidence = verdict.get("evidence", {})
+    quality = verdict.get("data_quality", {})
+    limits = "; ".join(quality.get("reasons", [])) or "ограничений нет"
     return f"""
-ЗАКЛЮЧЕНИЕ ОБ ИСТОЧНИКЕ НАРУШЕНИЯ (автоматическая атрибуция):
+ПРЕДПОЛАГАЕМЫЙ ИСТОЧНИК НАРУШЕНИЯ (автоматическая атрибуция, требует подтверждения):
 
-  • установленный источник — {verdict['cause_label']};
+  • предполагаемый источник — {verdict['cause_label']};
   • зона ответственности — {verdict['responsible']};
-  • уверенность модели — {round(verdict['confidence'] * 100)}%;
+  • оценка модели — {round(verdict['confidence'] * 100)}%, достаточность данных — {quality.get('label', '—')};
   • ПК организации в отклонении — {evidence.get('devices_affected', 0)} из {evidence.get('devices_total', 0)};
-  • школы того же провайдера в районе в отклонении — {evidence.get('peers_same_provider_district_affected', 0)} из {evidence.get('peers_same_provider_district', 0)};
-  • школы иных провайдеров в районе в отклонении — {evidence.get('peers_other_providers_district_affected_pct', 0)}%.
+  • сопоставимые школы того же провайдера в районе в отклонении — {evidence.get('peers_same_provider_district_affected', 0)} из {evidence.get('peers_same_provider_district', 0)};
+  • сопоставимые школы иных провайдеров в районе в отклонении — {evidence.get('peers_other_providers_district_affected_pct', 0)}% ({evidence.get('peers_other_providers_district', 0)} школ);
+  • ограничения данных — {limits}.
 
 {verdict['narrative']}
 """
+
+
+def _limits_text() -> str:
+    th = thresholds()
+    return (f"Download ≥ {th.down_min:g}, Upload ≥ {th.up_min:g} Мбит/с, Ping ≤ {th.ping_max:g} мс, "
+            f"Jitter ≤ {th.jitter_max:g} мс, потери ≤ {th.loss_max:g}%")
 
 
 def _fallback_claim(incident: Incident, school: School, analysis: dict,
@@ -79,8 +90,9 @@ def _fallback_claim(incident: Incident, school: School, analysis: dict,
 
   • средняя фактическая скорость загрузки — {analysis['avg_speed']} Мбит/с
     ({round(100 * analysis['avg_speed'] / max(analysis['contract_speed'], 1))}% от договорной);
-  • соответствие показателям SLA — {analysis['sla_compliance_pct']}% при нормативе 95%;
-  • количество зафиксированных отклонений — {analysis['violations']} из {analysis['samples']} замеров;
+  • доля замеров в пределах установленных порогов ({_limits_text()}) — {analysis['sla_compliance_pct']}%;
+  • доступность соединения — {analysis['availability_pct']}% при нормативе {analysis['availability_norm_pct']:g}%;
+  • количество замеров с отклонениями — {analysis['violations']} из {analysis['samples']};
   • обстоятельства инцидента — {incident.description};
   • дата и время фиксации — {incident.start_time:%d.%m.%Y %H:%M} (время сервера).
 
@@ -115,7 +127,13 @@ def generate_claim(incident_id: int, request: Request, db: Session = Depends(get
     if not school or not can_access_school(user, school):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа к инциденту")
 
-    analysis = analyze(db, school.id, days=30)
+    # Окно анализа — вокруг инцидента, а не «от сегодня»: претензия о том, что было.
+    analysis = analyze(db, school.id, days=30,
+                       now=incident.start_time + timedelta(days=1) if incident.start_time else None)
+    if not analysis["samples"]:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "Нет замеров основной линии за период инцидента — претензию "
+                            "формировать не на чем")
     verdict = attribution.diagnose_incident(db, incident)
     model = _genai()
     source = "gemini"
@@ -129,20 +147,22 @@ def generate_claim(incident_id: int, request: Request, db: Session = Depends(get
 - Договорная скорость: {school.contract_speed_down} Мбит/с, тип линии: {school.connection_type}
 - Инцидент {incident.incident_number} от {incident.start_time}: {incident.description}
 - Средняя фактическая скорость за 30 суток: {analysis['avg_speed']} Мбит/с
-- Соответствие SLA: {analysis['sla_compliance_pct']}% (норматив 95%)
-- Нарушений: {analysis['violations']} из {analysis['samples']} замеров
+- Доля замеров в пределах порогов ({_limits_text()}): {analysis['sla_compliance_pct']}%
+- Доступность: {analysis['availability_pct']}% (норматив {analysis['availability_norm_pct']:g}%)
+- Замеров с отклонениями: {analysis['violations']} из {analysis['samples']}
 - Повторяющиеся паттерны: {'; '.join(p['text'] for p in analysis['patterns']) or 'не выявлены'}
 - Ответственное лицо: {school.contact_name}, {school.contact_phone}
 
-ЗАКЛЮЧЕНИЕ СИСТЕМЫ ОБ ИСТОЧНИКЕ НАРУШЕНИЯ (использовать как ключевой аргумент,
-изложить дословно по смыслу, не смягчать):
+ВЫВОД СИСТЕМЫ ОБ ИСТОЧНИКЕ НАРУШЕНИЯ — ЭТО ПРЕДПОЛОЖЕНИЕ, а не установленный факт.
+Излагай его именно как предполагаемый источник, с теми же оговорками и ограничениями
+данных, не усиливай и не превращай в утверждение о вине:
 {verdict.get('narrative', 'источник не установлен')}
-Установленный источник: {verdict.get('cause_label', '—')}.
+Предполагаемый источник: {verdict.get('cause_label', '—')}.
 Зона ответственности: {verdict.get('responsible', '—')}.
 
 Структура: шапка (кому/от кого), исходящий номер и дата, ссылки на договор и
 законодательство РК о связи, таблица зафиксированных отклонений, отдельный раздел
-«Заключение об источнике нарушения» с доводом о границе зоны отказа, требование
+«Предполагаемый источник нарушения» с описанием границы зоны отказа и ограничений данных, требование
 устранить в срок не более 4 часов, требование перерасчёта, предупреждение о жалобе
 в Инспекцию связи МЦРИАП РК. Стиль строго официальный, готовый к подписанию.
 Язык — русский."""
@@ -158,23 +178,36 @@ def generate_claim(incident_id: int, request: Request, db: Session = Depends(get
     db.commit()
     write_audit(db, user.email, user.role, "ai.claim_generated", incident.incident_number,
                 request.client.host if request.client else "", {"source": source})
-    # Если виновата сама организация, претензия провайдеру — потерянное время
-    # и репутационный риск. Система обязана предупредить об этом до отправки.
-    advised = verdict.get("cause") in ("provider_node", "regional")
-    advisory = ("Атрибуция подтверждает ответственность провайдера — претензия обоснована."
-                if advised else
-                f"ВНИМАНИЕ: установленный источник — {verdict.get('cause_label', '—')} "
-                f"(зона ответственности: {verdict.get('responsible', '—')}). Направление "
-                f"претензии провайдеру не имеет доказательной перспективы: устраните причину "
-                f"внутри периметра организации." if verdict.get("cause") != "none" else
-                "Источник нарушения не установлен — рекомендуется дождаться накопления замеров.")
+    # Претензия обоснована только при достаточных данных и предполагаемой стороне провайдера.
+    # Уровень школы (ЛВС, роутер, ИНДИВИДУАЛЬНАЯ ЛИНИЯ) провайдера не исключает, поэтому
+    # прямого запрета нет — есть условие: сначала исключить оборудование школы.
+    cause = verdict.get("cause")
+    advised = bool(verdict.get("actionable"))
+    if advised:
+        advisory = ("Данные указывают на сторону провайдера; вывод предположительный — "
+                    "провайдер вправе его оспорить, приложите акт с замерами.")
+    elif cause == "school_lan":
+        advisory = ("ВНИМАНИЕ: предполагаемый источник — уровень школы (ЛВС, роутер или "
+                    "индивидуальная линия провайдера). Перед направлением претензии исключите "
+                    "неисправность оборудования школы; при его исправности допустимо просить "
+                    "провайдера о диагностике линии.")
+    elif cause == "device":
+        advisory = ("ВНИМАНИЕ: отклонение локализовано на отдельном ПК — претензия провайдеру "
+                    "преждевременна, проверьте ПК и его подключение.")
+    elif cause in ("provider_node", "regional"):
+        advisory = ("Предполагается сторона провайдера, но данных недостаточно для уверенного "
+                    "вывода: " + "; ".join(verdict.get("data_quality", {}).get("reasons", [])) +
+                    ". Уточните у провайдера плановые работы и аварии по району.")
+    else:
+        advisory = ("Источник нарушения не установлен — данных недостаточно; не указывайте "
+                    "источник в претензии, приложите только акт с замерами.")
     return {"claim_text": claim_text, "source": source, "analysis": analysis,
             "verdict": verdict, "claim_advised": advised, "advisory": advisory}
 
 
 @router.get("/sla-report/{school_id}", summary="PDF-акт о нарушении SLA",
             response_class=Response)
-def sla_pdf(school_id: int, days: int = 30, request: Request = None,
+def sla_pdf(school_id: int, days: int = 30, as_of: datetime | None = None, request: Request = None,
             db: Session = Depends(get_db), user: User = Depends(current_user)):
     """Killer feature #2: доказательная база нарушения SLA одним файлом."""
     school = db.get(School, school_id)
@@ -183,16 +216,20 @@ def sla_pdf(school_id: int, days: int = 30, request: Request = None,
     if not can_access_school(user, school):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Нет доступа")
 
-    analysis = analyze(db, school_id, days=days)
+    now = naive_utc(as_of) if as_of else None
+    analysis = analyze(db, school_id, days=days, now=now)
+    if not analysis["samples"]:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "Нет замеров основной линии за период — акт не формируется")
     incidents = [{"incident_number": i.incident_number,
                   "start_time": i.start_time.isoformat() if i.start_time else "",
                   "status": i.status, "description": i.description}
                  for i in db.query(Incident).filter(Incident.school_id == school_id)
                  .order_by(Incident.id.desc()).limit(12).all()]
-    payload = {**school_brief(school), "contact_name": school.contact_name,
+    payload = {**school_brief(school, now), "contact_name": school.contact_name,
                "contact_phone": school.contact_phone}
-    verdict = attribution.diagnose(db, school_id)
-    prediction = ml_forecast.predict(db, school_id)
+    verdict = attribution.diagnose(db, school_id, at=now)
+    prediction = ml_forecast.predict(db, school_id, at=now)
     if prediction.get("probability") is not None:
         verdict["forecast_text"] = (
             f"Вероятность выхода за SLA в ближайшие {prediction['horizon_hours']} ч — "

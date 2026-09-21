@@ -7,9 +7,10 @@ import random
 from datetime import datetime, timedelta
 
 from app.database import SessionLocal, migrate_schema as _migrate
-from app.models import Device, FaultEvent, Incident, Measurement, School, User
+from app.models import Device, FaultEvent, Incident, Line, Measurement, School, User
 from app.security import fingerprint, hash_password
 from app.services.ml.train import train_models
+from app.services.lines import ensure_defaults, main_line, sync_from_monitors
 from app.services.status import classify
 
 random.seed(20260916)
@@ -336,18 +337,23 @@ def seed_measurements(db, devices: list[Device], days: int = 14) -> None:
         own = per_device[device.device_id]
         ok = sum(1 for r in own
                  if classify(r["download_speed"], r["ping"], r["packet_loss"],
-                             school.contract_speed_down, r["is_offline"]) == "Норма")
+                             school.contract_speed_down, r["is_offline"],
+                             upload=r["upload_speed"], jitter=r["jitter"],
+                             contract_up=school.contract_speed_up) == "Норма")
         device.current_download = last["download_speed"]
         device.current_upload = last["upload_speed"]
         device.current_ping = last["ping"]
         device.current_jitter = last["jitter"]
         device.current_packet_loss = last["packet_loss"]
         device.last_seen = last["timestamp"]
+        device.last_measured = last["timestamp"]
         device.availability_pct = round(
             100 * (1 - sum(1 for r in own if r["is_offline"]) / len(own)), 1)
         device.sla_compliance_pct = round(100 * ok / len(own), 1)
         status = classify(last["download_speed"], last["ping"], last["packet_loss"],
-                          school.contract_speed_down, last["is_offline"])
+                          school.contract_speed_down, last["is_offline"],
+                          upload=last["upload_speed"], jitter=last["jitter"],
+                          contract_up=school.contract_speed_up)
         device.status = ("offline" if status == "Нет соединения"
                          else "online" if status == "Норма" else "warning")
         interval = {"Норма": 900, "Нестабильно": 180}.get(status, 60)
@@ -357,27 +363,15 @@ def seed_measurements(db, devices: list[Device], days: int = 14) -> None:
 
 
 def recompute_schools(db) -> None:
-    """Статус школы = состояние основного шлюза, метрики — среднее по её ПК."""
-    order = {"Норма": 0, "Нестабильно": 1, "Критично": 2, "Нет соединения": 3}
-    for school in db.query(School).all():
-        devices = db.query(Device).filter(Device.school_id == school.id).all()
-        if not devices:
-            continue
-        school.current_download = round(sum(d.current_download or 0 for d in devices) / len(devices), 1)
-        school.current_upload = round(sum(d.current_upload or 0 for d in devices) / len(devices), 1)
-        school.current_ping = round(sum(d.current_ping or 0 for d in devices) / len(devices), 1)
-        school.current_jitter = round(sum(d.current_jitter or 0 for d in devices) / len(devices), 1)
-        school.current_packet_loss = round(
-            sum(d.current_packet_loss or 0 for d in devices) / len(devices), 2)
-        school.last_measurement = max((d.last_seen for d in devices if d.last_seen),
-                                      default=datetime.utcnow())
-        # Статус организации — по усреднённому каналу; проблемы отдельного ПК
-        # видны на ПК-уровне и не «красят» всю школу.
-        school.status = classify(school.current_download, school.current_ping,
-                                 school.current_packet_loss, school.contract_speed_down,
-                                 all(d.status == "offline" for d in devices))
+    """Статус школы = состояние основной линии, измеренной шлюзом (ТЗ п.10).
+    Рабочие места оцениваются отдельно и школу не «красят»."""
+    ensure_defaults(db)     # пороги, основные линии, привязка шлюзов
+    for line in db.query(Line).filter(Line.role == "main"):
+        school = db.get(School, line.school_id)
+        if school:
+            sync_from_monitors(db, line, school)
     db.commit()
-    print("  статусы школ пересчитаны по ПК-агентам")
+    print("  статусы школ пересчитаны по основным линиям")
 
 
 def refresh_incidents(db) -> None:
@@ -397,6 +391,7 @@ def refresh_incidents(db) -> None:
         db.add(Incident(
             incident_number=f"INC-2026-{counter:04d}", school_id=school.id,
             device_id=worst.device_id if worst else None, provider=school.provider,
+            line_id=(main_line(db, school.id).id if main_line(db, school.id) else None),
             status=random.choice(["Новый", "В работе", "Передан поставщику"]),
             severity="critical" if school.status == "Нет соединения" else "major",
             start_time=school.last_measurement or datetime.utcnow(),
