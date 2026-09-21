@@ -217,6 +217,16 @@ def spool_size(conn) -> int:
 #  ЗАМЕР СКОРОСТИ
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _find_speedtest_cmd() -> list[str]:
+    venv_cmd = Path(sys.executable).parent / ("speedtest-cli.exe" if platform.system() == "Windows" else "speedtest-cli")
+    if venv_cmd.exists():
+        return [str(venv_cmd), "--json"]
+    import shutil
+    if shutil.which("speedtest-cli"):
+        return ["speedtest-cli", "--json"]
+    return [sys.executable, "-m", "speedtest", "--json"]
+
+
 def measure() -> dict:
     result = {
         "timestamp": datetime.now(UTC).isoformat(),
@@ -227,7 +237,7 @@ def measure() -> dict:
     set_status(text="Тест скорости...")
     try:
         proc = subprocess.run(
-            ["speedtest-cli", "--json"],
+            _find_speedtest_cmd(),
             capture_output=True, text=True, timeout=120,
         )
         if proc.returncode == 0:
@@ -547,7 +557,7 @@ class StatusWindow(tk.Toplevel):
         ttk.Button(btn_frame, text="Скрыть",
                    command=self.withdraw).pack(side="left", padx=4)
 
-        self.withdraw()   # скрыто по умолчанию
+        self.deiconify()   # отображаем окно статуса при запуске
 
     def refresh(self, st: dict):
         unit = {"download": " Мбит/с", "upload": " Мбит/с",
@@ -595,28 +605,43 @@ class TrayApp:
     def _start_tray(self):
         if not HAS_TRAY:
             return
-        icon_img = make_icon("init")
-        self._tray_icon = pystray.Icon(
-            "vko-agent", icon_img, "SAM VKO", menu=self._build_tray_menu()
-        )
-        # pystray.run() блокирует → запускаем в отдельном потоке
-        t = threading.Thread(target=self._tray_icon.run, daemon=True)
-        t.start()
+        try:
+            icon_img = make_icon("init")
+            self._tray_icon = pystray.Icon(
+                "vko-agent", icon_img, "SAM VKO", menu=self._build_tray_menu()
+            )
+            def _runner():
+                try:
+                    self._tray_icon.run()
+                except Exception:
+                    pass
+            t = threading.Thread(target=_runner, daemon=True)
+            t.start()
+        except Exception:
+            pass
 
     def _update_tray_icon(self, st: dict):
         if not self._tray_icon:
             return
-        if st["offline"]:
-            state = "error"
-        elif st["loss"] > 5 or (st["download"] > 0 and st["download"] < 10):
-            state = "warn"
-        else:
-            state = "ok"
-        self._tray_icon.icon = make_icon(state)
-        self._tray_icon.title = (
-            f"САМ ВКО  ↓{st['download']:.0f} ↑{st['upload']:.0f} "
-            f"ping {st['ping']:.0f}мс  {st['text']}"
-        )
+        try:
+            if st.get("offline"):
+                state = "error"
+            elif st.get("loss", 0) > 5 or (st.get("download", 0) > 0 and st.get("download", 0) < 10):
+                state = "warn"
+            else:
+                state = "ok"
+            self._tray_icon.icon = make_icon(state)
+            if platform.system() == "Windows":
+                self._tray_icon.title = (
+                    f"САМ ВКО ↓{st['download']:.0f} ↑{st['upload']:.0f} "
+                    f"ping {st['ping']:.0f}мс"
+                )
+            else:
+                self._tray_icon.title = (
+                    f"SAM VKO: D:{st['download']:.0f} U:{st['upload']:.0f} P:{st['ping']:.0f}ms"
+                )
+        except Exception:
+            pass
 
     # ── Обработка событий из фонового потока ──────────────────────────────────
 

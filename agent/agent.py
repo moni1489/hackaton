@@ -190,7 +190,15 @@ def enroll() -> dict:
     return state
 
 
-# --- Замер -----------------------------------------------------------------
+def _find_speedtest_cmd() -> list[str]:
+    venv_cmd = Path(sys.executable).parent / ("speedtest-cli.exe" if platform.system() == "Windows" else "speedtest-cli")
+    if venv_cmd.exists():
+        return [str(venv_cmd), "--json"]
+    import shutil
+    if shutil.which("speedtest-cli"):
+        return ["speedtest-cli", "--json"]
+    return [sys.executable, "-m", "speedtest", "--json"]
+
 
 def measure(deep: bool) -> dict:
     """Инструментальный замер. В режиме deep добавляется контроль потерь пакетов."""
@@ -198,7 +206,7 @@ def measure(deep: bool) -> dict:
               "upload_speed": 0.0, "ping": 0.0, "jitter": 0.0, "packet_loss": 0.0,
               "is_offline": True, "source": "live"}
     try:
-        proc = subprocess.run(["speedtest-cli", "--json"], capture_output=True,
+        proc = subprocess.run(_find_speedtest_cmd(), capture_output=True,
                               text=True, timeout=180)
         if proc.returncode == 0:
             data = json.loads(proc.stdout)
