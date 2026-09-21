@@ -89,6 +89,8 @@ def setUpModule():
                             ("prov@t", "provider")):
             db.add(User(email=email, full_name=email, role=role, password_hash=hash_password(PW)))
         db.commit()
+    settings.DEMO_RATE_LIMIT_OPERATOR = 100_000    # тесты делают сотни действий; сам лимит проверяется отдельно
+    settings.DEMO_RATE_LIMIT_SESSION = 100_000
     engine.store = Store(DEAD_REDIS)           # по умолчанию — режим без Redis
     SERVER = Server()
     BASE = SERVER.start()
@@ -254,6 +256,17 @@ class Access(Base):
         # другой зритель за тем же адресом не страдает
         self.assertEqual(s.view(cid="other-viewer")["stage"]["key"], "waiting")
         s.close()
+
+    def test_operator_actions_are_rate_limited(self):
+        s = Session("admin@t")
+        keep = settings.DEMO_RATE_LIMIT_OPERATOR
+        settings.DEMO_RATE_LIMIT_OPERATOR = 4
+        try:
+            codes = [httpx.post(f"{BASE}/api/demo/sessions/{s.sid}/control", json={"action": "pause"},
+                                headers=s.op).status_code for _ in range(8)]
+        finally:
+            settings.DEMO_RATE_LIMIT_OPERATOR = keep
+        self.assertEqual(codes[-1], 429)          # окно счётчика общее с прочими тестами — считаем только хвост
 
     def test_login_is_rate_limited_in_demo_mode(self):
         keep = (settings.DEMO_MODE, settings.DEMO_LOGIN_RATE_LIMIT)
@@ -695,9 +708,11 @@ class WithRedis(unittest.TestCase):
         [t.join(30) for t in threads]
         self.assertEqual(a.load("sharedsess01")["n"], 50)        # ни одно обновление не потеряно
         self.assertEqual(a.version("sharedsess01"), 51)
-        a.set_viewers("sharedsess01", 30)
-        b.set_viewers("sharedsess01", 20)
-        self.assertEqual(a.viewers("sharedsess01"), 50)
+        now = time.time()
+        a.touch_viewers("sharedsess01", {f"v{i}": now for i in range(30)})
+        b.touch_viewers("sharedsess01", {f"v{i}": now for i in range(25, 45)})    # 5 зрителей — на обоих процессах
+        self.assertEqual(a.viewers("sharedsess01"), 45)                          # уникальные, без двойного счёта
+        self.assertEqual(b.viewers("sharedsess01", {"v-local": now}), 46)
         b.delete("sharedsess01")
         self.assertIsNone(a.load("sharedsess01"))                # закрытие видно всем процессам
 

@@ -22,7 +22,7 @@ from ...config import settings
 
 log = logging.getLogger("demo.store")
 RETRY_SEC = 5.0
-VIEWER_TTL_SEC = 10.0
+VIEWER_TTL_SEC = 15.0
 
 
 class Store:
@@ -37,7 +37,7 @@ class Store:
         self._ver: dict[str, int] = {}
         self._blobs: dict[str, str] = {}
         self._gone: set[str] = set()
-        self._viewers: dict[str, dict[str, tuple[int, float]]] = {}
+        self._viewers: dict[str, dict[str, float]] = {}
         self._expires: dict[str, float] = {}
 
     # --- Redis: подключение и защищённый вызов ------------------------------------------
@@ -233,30 +233,31 @@ class Store:
 
     # --- Зрители ---------------------------------------------------------------------------
 
-    def set_viewers(self, sid: str, count: int) -> None:
-        """Каждый процесс публикует число СВОИХ зрителей; сумма — общее число."""
+    def touch_viewers(self, sid: str, seen: dict[str, float]) -> None:
+        """Отмечает зрителей (id → время последнего контакта, эпоха). Набор общий для всех
+        процессов и хранится по id зрителя: зритель, попавший на два процесса, считается один раз."""
         now = time.time()
         with self._mu:
-            self._viewers.setdefault(sid, {})[self.pid] = (count, now)
+            table = self._viewers.setdefault(sid, {})
+            table.update(seen)
+            for cid in [c for c, t in table.items() if now - t > VIEWER_TTL_SEC]:
+                del table[cid]
         key = self._key("viewers", sid)
 
         def write(r):
-            r.hset(key, self.pid, f"{count}:{now}")
-            r.expire(key, 60)
+            pipe = r.pipeline()
+            if seen:
+                pipe.zadd(key, seen)
+            pipe.zremrangebyscore(key, "-inf", now - VIEWER_TTL_SEC)
+            pipe.expire(key, 60)
+            pipe.execute()
         self._try(write)
 
-    def viewers(self, sid: str, own: int | None = None) -> int:
-        """Всего зрителей по всем процессам. own — число зрителей этого процесса «прямо сейчас»."""
-        now = time.time()
-        table, ok = self._try(lambda r: r.hgetall(self._key("viewers", sid)))
+    def viewers(self, sid: str, local: dict[str, float] | None = None) -> int:
+        """Число уникальных зрителей по всем процессам. local — зрители этого процесса «прямо сейчас»."""
+        edge = time.time() - VIEWER_TTL_SEC
+        members, ok = self._try(lambda r: r.zrangebyscore(self._key("viewers", sid), edge, "+inf"))
         if not ok:
             with self._mu:
-                table = {p: f"{c}:{t}" for p, (c, t) in self._viewers.get(sid, {}).items()}
-        total = 0
-        for pid, value in (table or {}).items():
-            count, stamp = value.split(":")
-            if pid == self.pid and own is not None:
-                continue
-            if now - float(stamp) <= VIEWER_TTL_SEC:
-                total += int(count)
-        return total + (own or 0)
+                members = [c for c, t in self._viewers.get(sid, {}).items() if t >= edge]
+        return len(set(members or ()) | {c for c, t in (local or {}).items() if t >= edge})

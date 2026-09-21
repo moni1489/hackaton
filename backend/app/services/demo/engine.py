@@ -24,13 +24,12 @@ from ...config import settings
 from ..ml.features import CAUSES
 from . import scenario
 from .scenario import HOLD_STAGES, IDX, STAGE_KEYS, build_view, claim_text, report_pdf
-from .store import Store
+from .store import VIEWER_TTL_SEC, Store
 
 log = logging.getLogger("demo.engine")
 
 TICK_SEC = 0.5
 HEARTBEAT_SEC = 5.0
-PRESENCE_SEC = 15.0
 STEPS = 4                                   # шагов диагностики
 DEFAULT_INTERVALS = {"normal": 10, "incident_started": 8, "diagnostics": 20, "ml_result": 12,
                      "operator_confirmed": 6, "report_ready": 0}
@@ -366,7 +365,7 @@ def control_info(doc: dict) -> dict:
     blocked = stage == "operator_review" and doc["decision"] is None
     return {
         "settings": cfg, "paused": doc["paused_at"] is not None, "run": doc["run"],
-        "viewers": store.viewers(doc["id"], own=hub.local_viewers(doc["id"])),
+        "viewers": store.viewers(doc["id"], hub.local_viewers(doc["id"])),
         "backend": store.backend(), "created_at": doc["created_at"],
         "can": {"start": stage in ("waiting", "reset"),
                 "next": not blocked and stage not in ("waiting", "reset"),
@@ -413,15 +412,16 @@ class Hub:
             self.subs.pop(sid, None)
 
     def touch(self, sid: str, cid: str) -> None:
-        self.seen.setdefault(sid, {})[cid] = time.monotonic()
+        self.seen.setdefault(sid, {})[cid] = time.time()
 
-    def local_viewers(self, sid: str) -> int:
+    def local_viewers(self, sid: str) -> dict[str, float]:
+        """Зрители этого процесса: id → время последнего контакта."""
         table = self.seen.get(sid, {})
-        edge = time.monotonic() - PRESENCE_SEC
+        edge = time.time() - VIEWER_TTL_SEC
         for cid, seen in list(table.items()):
             if seen < edge:
                 table.pop(cid, None)
-        return len(table)
+        return dict(table)
 
     def publish(self, sid: str, payload: str | None) -> None:
         for queue in self.subs.get(sid, ()):
@@ -456,7 +456,7 @@ async def run_loop() -> None:
             if time.monotonic() - beat >= 2.0:
                 beat = time.monotonic()
                 for sid in list(hub.seen):
-                    await asyncio.to_thread(store.set_viewers, sid, hub.local_viewers(sid))
+                    await asyncio.to_thread(store.touch_viewers, sid, hub.local_viewers(sid))
                     if not hub.seen[sid]:
                         hub.seen.pop(sid, None)
         except asyncio.CancelledError:
