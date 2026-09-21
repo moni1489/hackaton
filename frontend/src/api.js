@@ -1,6 +1,6 @@
 /* Клиент API: токен, обработка ошибок, скачивание файлов. */
-export const API_URL = import.meta.env.VITE_API_URL
-  || (import.meta.env.PROD ? 'https://codemasters1.onrender.com' : 'http://localhost:8000');
+// По умолчанию (и в dev, и в prod) — бэкенд на Render; для локального бэка: VITE_API_URL=http://localhost:8000
+export const API_URL = import.meta.env.VITE_API_URL || 'https://codemasters1.onrender.com';
 
 const TOKEN_KEY = 'vko.token';
 const USER_KEY = 'vko.user';

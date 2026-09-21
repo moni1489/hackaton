@@ -2,14 +2,16 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { LatencyChart, SpeedChart } from './Charts';
-import { causeUi } from './Diagnostics';
+import { QUALITY_TAG, causeUi } from './Diagnostics';
 import {
   IcoAlert, IcoClose, IcoDoc, IcoDown, IcoSpark, IcoTrend,
 } from './icons';
 import {
-  Bar, Metric, Pair, RISK_CLASS, Section, Tag,
-  deviceMeta, fmtAgo, fmtDateTime, statusMeta,
+  Bar, Metric, Pair, RISK_CLASS, Section, StatusCell, Tag,
+  deviceMeta, fmtAge, fmtDateTime, fmtStamp, statusMeta,
 } from './ui';
+
+const LINE_ROLE = { main: 'основная', backup: 'резервная', disabled: 'отключена' };
 
 export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) {
   const [school, setSchool] = useState(null);
@@ -20,6 +22,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
   const [claim, setClaim] = useState(null);
   const [claimBusy, setClaimBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -57,6 +60,15 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
     setPdfBusy(false);
   };
 
+  const exportData = async (format) => {
+    setExportBusy(true);
+    try {
+      await api.exportMeasurements({ school_id: schoolId, format },
+        `${school.school_id_code}_measurements.${format}`);
+    } catch (e) { setError(e.message); }
+    setExportBusy(false);
+  };
+
   if (!school) {
     return (
       <div className="overlay" onClick={onClose}>
@@ -70,6 +82,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
   }
 
   const meta = statusMeta(school.status);
+  const live = !school.is_stale;   // устаревший замер не выдаём за текущие показатели
   const ratio = school.contract_speed_down
     ? Math.round(100 * (school.current_download || 0) / school.contract_speed_down) : 0;
 
@@ -146,21 +159,56 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
               <Tag kind="off">{school.connection_type}</Tag>
             </div>
             <h2>{school.name}</h2>
-            <p>{school.region} · {school.address} · обновлено {fmtAgo(school.last_measurement)}</p>
+            <p>{school.region} · {school.address} · {live
+              ? `замер ${fmtAge(school.age_min)} назад`
+              : `нет свежих данных · последний замер ${fmtStamp(school.last_measurement)}`}</p>
           </div>
           <button className="close-btn" onClick={onClose}><IcoClose size={17} /></button>
         </div>
 
         <div className="drawer-body">
+          {!live ? (
+            <div className="banner stale" style={{ borderRadius: 10, marginBottom: 14 }}>
+              <span>
+                <b>Нет свежих данных.</b> Последний замер основной линии: {fmtStamp(school.last_measurement)}
+                {school.last_known_status ? `, тогда статус был «${school.last_known_status}»` : ''}.
+                Текущий статус неизвестен.
+              </span>
+            </div>
+          ) : null}
           <div className="metric-row">
-            <Metric label="Загрузка" value={school.current_download} unit=" Мбит/с"
-              sub={`${ratio}% от договорной`} color={ratio < 60 ? '#E0453E' : '#17A65B'} />
-            <Metric label="Отдача" value={school.current_upload} unit=" Мбит/с"
+            <Metric label="Загрузка" value={live ? school.current_download : '—'} unit={live ? ' Мбит/с' : ''}
+              sub={live ? `${ratio}% от договорной` : 'нет свежего замера'}
+              color={live ? (ratio < 60 ? '#E0453E' : '#17A65B') : undefined} />
+            <Metric label="Отдача" value={live ? school.current_upload : '—'} unit={live ? ' Мбит/с' : ''}
               sub={`договор ${school.contract_speed_up} Мбит/с`} />
-            <Metric label="Задержка" value={school.current_ping} unit=" мс"
-              sub={`джиттер ${school.current_jitter} мс`} />
-            <Metric label="Потери пакетов" value={school.current_packet_loss} unit=" %"
+            <Metric label="Задержка" value={live ? school.current_ping : '—'} unit={live ? ' мс' : ''}
+              sub={live ? `джиттер ${school.current_jitter} мс` : 'нет свежего замера'} />
+            <Metric label="Потери пакетов" value={live ? school.current_packet_loss : '—'} unit={live ? ' %' : ''}
               sub={`ПК-агентов: ${school.devices.length}`} />
+          </div>
+
+          <Section title="Линии связи и рабочие места" />
+          <div className="block">
+            {school.lines.map((line) => (
+              <div key={line.id} style={{
+                display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0',
+                borderTop: '1px solid var(--surface-3)',
+              }}>
+                <Tag kind={line.role === 'main' ? 'info' : 'off'}>{LINE_ROLE[line.role] || line.role}</Tag>
+                <code>{line.code}</code>
+                <span style={{ fontSize: 12, color: 'var(--ink-2)', flex: 1 }}>
+                  {line.provider} · {line.connection_type} · договор {line.contract_speed_down}/{line.contract_speed_up} Мбит/с
+                </span>
+                <StatusCell status={line.status} />
+              </div>
+            ))}
+            <p className="insight-note" style={{ marginBottom: 0 }}>
+              Статус школы определяет основная линия. Рабочих мест: {school.workstations.total}
+              , со свежими данными {school.workstations.with_fresh_data}, с отклонениями{' '}
+              {school.workstations.degraded}, не в сети {school.workstations.offline}. Они оцениваются
+              отдельно и на статус школы не влияют.
+            </p>
           </div>
 
           {school.published_connections?.length > 0 && <div className="insight" style={{ display: 'block', marginBottom: 16 }}>
@@ -179,10 +227,17 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
           {/* --- «Виновник»: заключение об источнике деградации --- */}
           {verdict && !verdict.error ? (
             <>
-              <Section title="Заключение об источнике">
-                <Tag kind={causeUi(verdict.cause).tag}>
-                  {Math.round(verdict.confidence * 100)}% уверенности
-                </Tag>
+              <Section title="Предполагаемый источник">
+                {verdict.cause !== 'no_data' ? (
+                  <Tag kind={causeUi(verdict.cause).tag}>
+                    оценка модели {Math.round(verdict.confidence * 100)}%
+                  </Tag>
+                ) : null}
+                {verdict.data_quality ? (
+                  <Tag kind={QUALITY_TAG[verdict.data_quality.level]}>
+                    данные: {verdict.data_quality.label}
+                  </Tag>
+                ) : null}
               </Section>
               <div className="block">
                 <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
@@ -200,6 +255,11 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                 <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: 'var(--ink-2)' }}>
                   {verdict.narrative}
                 </p>
+                {verdict.data_quality?.reasons?.length ? (
+                  <p style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ink-3)' }}>
+                    <b>Ограничения данных:</b> {verdict.data_quality.reasons.join('; ')}.
+                  </p>
+                ) : null}
                 <div className="mini-stats" style={{ marginTop: 12 }}>
                   <div className="mini-stat">
                     <div className="k">ПК в отклонении</div>
@@ -208,7 +268,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                     </div>
                   </div>
                   <div className="mini-stat">
-                    <div className="k">Школы провайдера в районе</div>
+                    <div className="k">Сопоставимые школы провайдера</div>
                     <div className="v">
                       {verdict.evidence.peers_same_provider_district_affected}/
                       {verdict.evidence.peers_same_provider_district}
@@ -233,12 +293,29 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                       {prediction.recommendation}
                     </span>
                   </div>
+                ) : prediction?.stale ? (
+                  <p className="insight-note" style={{ marginTop: 12, marginBottom: 0 }}>
+                    Прогноз не строится: нет свежих замеров основной линии.
+                  </p>
                 ) : null}
               </div>
             </>
           ) : null}
 
-          {analytics ? (
+          {analytics && !analytics.samples ? (
+            <>
+              <Section title="Анализ соответствия SLA" />
+              <div className="block">
+                <div className="empty" style={{ padding: 18 }}>
+                  Нет замеров основной линии за период
+                  {analytics.last_measurement ? `; последний — ${fmtStamp(analytics.last_measurement)}` : ''}.
+                  Показатели SLA не рассчитываются.
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {analytics?.samples ? (
             <>
               <Section title="Анализ соответствия SLA">
                 <Tag kind={RISK_CLASS[analytics.risk_level] || 'off'}>
@@ -277,6 +354,19 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                     </div>
                     <Bar value={analytics.stability} color="#2F6BF6" />
                   </div>
+                  <div>
+                    <div className="eyebrow" style={{ marginBottom: 8 }}>
+                      Доступность (норматив ≥ {analytics.availability_norm_pct}%)
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+                      <b className="mono" style={{ fontSize: 22 }}>{analytics.availability_pct}%</b>
+                      <span style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>
+                        ниже договорной доли: {analytics.below_contract_pct}% замеров
+                      </span>
+                    </div>
+                    <Bar value={analytics.availability_pct}
+                      color={analytics.availability_ok ? '#17A65B' : '#E0453E'} />
+                  </div>
                 </div>
                 {analytics.patterns.length ? (
                   <div style={{ marginTop: 14 }}>
@@ -299,14 +389,14 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
             </>
           ) : null}
 
-          <Section title={`Точки мониторинга — ПК-агенты (${school.devices.length})`}>
+          <Section title={`ПК-агенты (${school.devices.length})`}>
             <Tag kind="info">нажмите строку для ПК-уровня</Tag>
           </Section>
           <div className="page-card">
             <table className="grid">
               <thead>
                 <tr>
-                  <th>Device ID</th><th>Расположение</th><th>Линия</th>
+                  <th>Device ID</th><th>Роль</th><th>Расположение</th><th>Подключение</th>
                   <th>↓ Мбит/с</th><th>Ping</th><th>SLA</th><th>Статус</th>
                 </tr>
               </thead>
@@ -316,6 +406,9 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                   return (
                     <tr key={device.device_id} onClick={() => onOpenDevice(device.device_id)}>
                       <td><code>{device.device_id}</code></td>
+                      <td style={{ fontSize: 12 }}>
+                        {device.role === 'monitor' ? 'точка мониторинга' : 'рабочее место'}
+                      </td>
                       <td>{device.room}</td>
                       <td style={{ fontSize: 12, color: 'var(--ink-2)' }}>{device.link_mode}</td>
                       <td className="num">{device.current_download ?? 0}</td>
@@ -384,6 +477,8 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
         <div className="drawer-foot">
           {error ? <span style={{ color: 'var(--danger)', fontSize: 12, marginRight: 'auto' }}>{error}</span> : null}
           <button className="btn" onClick={onClose}>Закрыть</button>
+          <button className="btn" onClick={() => exportData('csv')} disabled={exportBusy}>CSV</button>
+          <button className="btn" onClick={() => exportData('xlsx')} disabled={exportBusy}>XLSX</button>
           <button className="btn accent" onClick={downloadPdf} disabled={pdfBusy}>
             <IcoDown size={13} style={{ verticalAlign: -2, marginRight: 6 }} />
             {pdfBusy ? 'Формирую…' : 'Акт SLA (PDF)'}
