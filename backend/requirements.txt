@@ -22,3 +22,6 @@ python-multipart>=0.0.12    # OAuth2 form login
 google-generativeai>=0.8
 reportlab>=4.2              # SLA violation PDF reports
 httpx>=0.28
+
+# --- Демонстрация (DEMO_MODE) ---
+segno>=1.6                 # QR-код ссылки для зрителей, чистый Python

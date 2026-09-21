@@ -2,7 +2,7 @@
    Маршрут /live/{session_id}#t=<временный токен>. Состояние приходит с сервера целиком
    (SSE; при недоступности потока — опрос каждые 2 с), клиент ничего не считает и не запускает.
    /live/replay — резервное воспроизведение записи того же сценария без сервера и интернета. */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API_URL } from './api';
 import { statusMeta } from './ui';
 import './demo.css';
@@ -90,12 +90,13 @@ async function pollOnce(url, token, signal) {
 
 function useLive(sid) {
   const [view, setView] = useState(null);
-  const [conn, setConn] = useState('connecting');
+  const [state, setConn] = useState('connecting');
   const offset = useRef(0);   // расхождение часов клиента и сервера — для обратного отсчёта
+  const token = useMemo(() => readToken(sid), [sid]);
+  const conn = token ? state : 'expired';
 
   useEffect(() => {
-    const token = readToken(sid);
-    if (!token) { setConn('expired'); return undefined; }
+    if (!token) return undefined;
     const cid = clientId();
     const base = `${API_URL}/api/demo/live/${encodeURIComponent(sid)}`;
     const query = `?cid=${encodeURIComponent(cid)}`;
@@ -155,7 +156,7 @@ function useLive(sid) {
       document.removeEventListener('visibilitychange', wake);
       window.removeEventListener('online', wake);
     };
-  }, [sid]);
+  }, [sid, token]);
 
   return { view, conn, offset };
 }
@@ -165,13 +166,14 @@ function useLive(sid) {
 const num = (value, digits = 1) => (value == null ? '—' : Number(value).toFixed(digits).replace(/\.0+$/, ''));
 const pct = (value) => `${Math.round(value * 100)}%`;
 
-function useTick(active) {
-  const [, setTick] = useState(0);
+function useNow(active) {   // «сейчас» для обратного отсчёта; тикает только пока он нужен
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return undefined;
-    const id = setInterval(() => setTick((n) => n + 1), 500);
+    const id = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(id);
   }, [active]);
+  return now;
 }
 
 const CONN_LABEL = {
@@ -490,8 +492,8 @@ function Report({ report, pdf }) {
 export function LiveView({ view, conn, offset = 0, pdf = null }) {
   const [selected, setSelected] = useState(null);
   const stage = view.stage;
-  const countdown = stage.next_at ? Math.max(0, Math.ceil(stage.next_at - (Date.now() + offset) / 1000)) : null;
-  useTick(stage.next_at != null);
+  const now = useNow(stage.next_at != null);
+  const countdown = stage.next_at ? Math.max(0, Math.ceil(stage.next_at - (now + offset) / 1000)) : null;
   const [connKind, connText] = CONN_LABEL[conn] || CONN_LABEL.connecting;
   const school = view.schools.find((s) => s.id === selected);
   const ordered = [...view.schools].sort((a, b) => Number(b.affected) - Number(a.affected) || a.id - b.id);

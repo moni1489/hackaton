@@ -28,7 +28,7 @@ from ...models import Device, Line, Measurement, School
 from ..ml import attribution, baseline, forecast
 from ..ml.attribution import CONFIDENCE_CAP, QUALITY_LABEL
 from ..ml.features import CAUSE_LABELS, CAUSE_OWNER, Topology
-from ..status import Thresholds, classify, freshness
+from ..status import ALL_STATUSES, Thresholds, classify, freshness
 
 SEED = 20260921
 
@@ -461,7 +461,9 @@ def build_view(doc: dict) -> dict:
         live = [s[moment] for s in scn["schools"]]
         focus = [s[moment] for s in scn["schools"] if s["affected"]] if incident else live
         rest = [s[moment] for s in scn["schools"] if not s["affected"]] if incident else []
+        worst = max((m["status"] for m in focus), key=ALL_STATUSES.index)
         metrics = {"scope": "affected" if incident else "all", "focus": _agg(focus), "rest": _agg(rest),
+                   "status": worst,
                    "norm_download": scn["ml"]["seasonal_norm"]["expected_mbps"] if incident else None}
 
     view = {
@@ -511,6 +513,35 @@ def build_view(doc: dict) -> dict:
         view["report"] = {"generated_at": doc["report"]["at"], "claim_text": doc["report"]["claim_text"],
                           "pdf_name": "SLA_DEMO_act.pdf"}
     return view
+
+
+def replay_frames(seed: int = SEED) -> list[dict]:
+    """Кадры записи сценария для резервного воспроизведения без сервера (тот же build_view)."""
+    scn = compute(seed)
+    doc = {"id": "replay", "title": "Демонстрация САМ ВКО (запись)", "run": 1, "version": 0,
+           "stage": "waiting", "stage_started": 0.0, "armed_at": 0.0, "substep": 0, "paused_at": None,
+           "settings": {"mode": "manual", "intervals": {}, "diag_step_sec": 4},
+           "decision": None, "report": None, "scn": scn}
+    frames = []
+
+    def shot(label: str) -> None:
+        doc["version"] += 1
+        frames.append({"label": label, "view": build_view(doc)})
+
+    for key, label, _ in STAGES:
+        doc["stage"] = key
+        if key == "diagnostics":
+            for done in range(len(scn["steps"]) + 1):
+                doc["substep"] = done
+                shot(f"{label}, шаг {done} из {len(scn['steps'])}")
+            continue
+        if key == "operator_confirmed":
+            doc["decision"] = {"kind": "confirm", "cause": scn["ml"]["cause"], "at": "запись",
+                               "by": "", "note": ""}
+        if key == "report_ready":
+            doc["report"] = {"at": "запись", "claim_text": claim_text(scn, doc["decision"])}
+        shot(label)
+    return frames
 
 
 def _next_at(doc: dict) -> float | None:
