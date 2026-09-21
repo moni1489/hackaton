@@ -207,6 +207,12 @@ class Access(Base):
         r = httpx.get(f"{BASE}/api/auth/me", headers=a.viewer)
         self.assertEqual(r.status_code, 401)
         self.assertEqual(httpx.get(f"{BASE}/api/demo/live/{a.sid}/state").status_code, 401)
+        # подделка срока: продлить чужой токен нельзя — подпись покрывает срок
+        exp, sig = a.token.split(".")
+        forged = f"{int(exp) + 86400}.{sig}"
+        r = httpx.get(f"{BASE}/api/demo/live/{a.sid}/state", headers={"Authorization": f"Bearer {forged}"})
+        self.assertEqual(r.status_code, 401)
+        self.assertLess(len(a.token), 40)                         # компактный: QR-код остаётся простым
         for s in (a, b):
             s.close()
 

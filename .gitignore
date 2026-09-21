@@ -14,3 +14,7 @@ dist/
 *.sqlite
 spool.sqlite
 .vko-agent/
+
+# Демо: сгенерированные материалы резервного режима
+frontend/public/demo-replay.json
+frontend/public/demo-report.pdf

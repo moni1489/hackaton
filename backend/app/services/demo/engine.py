@@ -9,16 +9,16 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import copy
 import hashlib
+import hmac
 import json
 import logging
 import secrets
 import threading
 import time
-from datetime import UTC, datetime, timedelta
-
-import jwt
+from datetime import UTC, datetime
 
 from ...config import settings
 from ..ml.features import CAUSES
@@ -58,26 +58,27 @@ class Conflict(DemoError):
 # --- Токен зрителя --------------------------------------------------------------------------
 
 def _viewer_key() -> bytes:
-    """Отдельный ключ подписи: токен зрителя не проходит как токен пользователя или устройства,
-    даже если знать формат остальных токенов."""
+    """Отдельный ключ подписи: токен зрителя не подходит ни к одному другому API проекта."""
     return hashlib.sha256(("demo-viewer|" + settings.JWT_SECRET).encode()).digest()
 
 
+def _sign(sid: str, expires: int) -> str:
+    mac = hmac.new(_viewer_key(), f"v1|{sid}|{expires}".encode(), hashlib.sha256).digest()[:16]
+    return base64.urlsafe_b64encode(mac).decode().rstrip("=")
+
+
 def issue_viewer_token(sid: str, now: float | None = None) -> tuple[str, datetime]:
-    issued = datetime.fromtimestamp(now or time.time(), UTC)
-    expires = issued + timedelta(minutes=settings.DEMO_VIEWER_TTL_MIN)
-    token = jwt.encode({"typ": "demo_viewer", "sid": sid, "iat": issued, "exp": expires,
-                        "jti": secrets.token_hex(4)}, _viewer_key(), algorithm="HS256")
-    return token, expires
+    """Компактный токен «<срок>.<подпись>» (~33 символа: QR-код остаётся простым и читается
+    с проектора). Подпись покрывает id сессии и срок — токен годен ровно для одной сессии."""
+    expires = int((now or time.time()) + settings.DEMO_VIEWER_TTL_MIN * 60)
+    return f"{expires}.{_sign(sid, expires)}", datetime.fromtimestamp(expires, UTC)
 
 
 def verify_viewer_token(token: str, sid: str) -> bool:
-    """Токен годен ровно для одной сессии и пока не истёк."""
-    try:
-        payload = jwt.decode(token, _viewer_key(), algorithms=["HS256"])
-    except jwt.PyJWTError:
+    head, _, signature = token.partition(".")
+    if not head.isdigit() or len(head) > 12 or int(head) < time.time():
         return False
-    return payload.get("typ") == "demo_viewer" and payload.get("sid") == sid
+    return hmac.compare_digest(signature, _sign(sid, int(head)))
 
 
 # --- Сессии ----------------------------------------------------------------------------------
@@ -479,4 +480,4 @@ def check_public_mode(db) -> None:
     if problems:
         raise RuntimeError("DEMO_PUBLIC=true, но сервер небезопасен для публичного показа: "
                            + "; ".join(problems) + ". См. docs/demo/SECURITY.md "
-                           "(python demo.py prepare --public).")
+                           "(python demo.py up --public: отдельная демо-БД и свежие секреты).")
