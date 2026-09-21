@@ -63,10 +63,11 @@ def _quoted(name: str | None) -> str:
 
 def _narrative(cause: str, school: School, ctx: dict) -> str:
     """Формулировка для оператора и для приложения к претензии."""
-    total, hit = ctx["devices_total"], ctx["devices_affected"]
-    peers = ctx["peers_same_provider_district"]
-    peers_hit = ctx["peers_same_provider_district_affected"]
-    depth = ctx["avg_depth_pct"]
+    total    = ctx.get("devices_total", 1)
+    hit      = ctx.get("devices_affected", 0)
+    peers    = ctx.get("peers_same_provider_district", 0)
+    peers_hit = ctx.get("peers_same_provider_district_affected", 0)
+    depth    = ctx.get("avg_depth_pct", 0)
 
     if cause == "provider_node":
         return (f"Просадка на {depth}% ниже нормы зафиксирована одновременно на {hit} из {total} "
