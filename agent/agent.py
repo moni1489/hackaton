@@ -29,7 +29,7 @@ from pathlib import Path
 
 import requests
 
-BACKEND_URL = os.environ.get("VKO_BACKEND", "http://localhost:8000")
+BACKEND_URL = os.environ.get("VKO_BACKEND", "https://codemasters1.onrender.com")
 SCHOOL_CODE = os.environ.get("VKO_SCHOOL_CODE", "VKO-RID-001")
 ENROLL_SECRET = os.environ.get("VKO_ENROLL_SECRET", "")
 ROOM = os.environ.get("VKO_ROOM", "Кабинет информатики №1")

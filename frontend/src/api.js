@@ -1,5 +1,6 @@
 /* Клиент API: токен, обработка ошибок, скачивание файлов. */
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export const API_URL = import.meta.env.VITE_API_URL
+  || (import.meta.env.PROD ? 'https://codemasters1.onrender.com' : 'http://localhost:8000');
 
 const TOKEN_KEY = 'vko.token';
 const USER_KEY = 'vko.user';
