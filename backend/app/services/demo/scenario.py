@@ -51,6 +51,7 @@ STAGES = [
 ]
 STAGE_KEYS = [s[0] for s in STAGES]
 IDX = {key: i for i, key in enumerate(STAGE_KEYS)}
+HOLD_STAGES = ("waiting", "reset", "operator_review")   # сами не переходят дальше: ждут ведущего/оператора
 
 # --- Синтетическая область ------------------------------------------------------
 
@@ -470,7 +471,7 @@ def build_view(doc: dict) -> dict:
         "notice": NOTICE,
         "stage": {"key": stage, "index": idx, "label": label, "description": blurb,
                   "started_at": doc["stage_started"], "paused": doc["paused_at"] is not None,
-                  "auto": cfg["mode"] == "auto" and doc["running"],
+                  "auto": cfg["mode"] == "auto",
                   "next_at": _next_at(doc)},
         "stages": [{"key": k, "label": l} for k, l, _ in STAGES],
         "clock": {"label": f"{scn['clock']['date']} {scn['clock'][moment]}" if started else None,
@@ -515,9 +516,7 @@ def build_view(doc: dict) -> dict:
 def _next_at(doc: dict) -> float | None:
     """Когда сработает автопереход (эпоха, с). None — переход только вручную/по решению оператора."""
     cfg = doc["settings"]
-    if cfg["mode"] != "auto" or not doc["running"] or doc["paused_at"] is not None:
-        return None
-    if doc["stage"] == "operator_review":
+    if cfg["mode"] != "auto" or doc["paused_at"] is not None or doc["stage"] in HOLD_STAGES:
         return None
     seconds = cfg["intervals"].get(doc["stage"], 0)
-    return doc["stage_started"] + seconds if seconds else None
+    return doc["armed_at"] + seconds if seconds else None
