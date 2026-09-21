@@ -565,11 +565,17 @@ class StatusWindow(tk.Toplevel):
                 pass
             webbrowser.open("https://codemasters1.onrender.com")
 
+        panel_url = os.environ.get("VKO_FRONTEND", "https://hackatondsa.vercel.app")
+        def _open_panel():
+            try:
+                subprocess.Popen(["xdg-open", panel_url])
+            except Exception:
+                webbrowser.open(panel_url)
+
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=(16, 0))
-        panel_url = os.environ.get("VKO_FRONTEND", "https://hackatondsa.vercel.app")
         ttk.Button(btn_frame, text="Открыть панель",
-                   command=lambda: webbrowser.open(panel_url)).pack(side="left", padx=4)
+                   command=_open_panel).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Скрыть",
                    command=self.withdraw).pack(side="left", padx=4)
 
@@ -610,7 +616,7 @@ class TrayApp:
     def _build_tray_menu(self) -> "pystray.Menu":
         return pystray.Menu(
             pystray.MenuItem("📊 Показать статус", self._show_status, default=True),
-            pystray.MenuItem("🌐 Открыть панель", lambda: webbrowser.open(os.environ.get("VKO_FRONTEND", "https://hackatondsa.vercel.app"))),
+            pystray.MenuItem("🌐 Открыть панель", lambda: subprocess.Popen(["xdg-open", "https://hackatondsa.vercel.app"])),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("⚙ Настройки", self._open_settings),
             pystray.MenuItem("🔄 Перезапустить агент", self._restart_agent),
