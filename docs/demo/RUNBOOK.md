@@ -121,6 +121,7 @@ cd frontend && VITE_API_URL= npm run dev     # прокси /api → :8000 на�
 | Симптом | Причина / решение |
 |---|---|
 | «Порт 8000 занят» | другое приложение; `python demo.py up --port 8010` |
+| **GitHub Codespaces:** ссылка с `10.x.x.x` не открывается | внутренний IP снаружи недоступен. `demo.py` сам подставляет адрес `https://<имя>-<порт>.app.github.dev`; у порта во вкладке PORTS выберите **Port Visibility → Public** (`gh codespace ports visibility 8010:public -c $CODESPACE_NAME`), иначе телефоны без входа в GitHub не откроют. Публичный порт — используйте `up --public` |
 | Телефон не открывает ссылку | разные сети / VPN / фаервол; проверьте адрес в QR, откройте порт в фаерволе, `--public-url` |
 | В QR «localhost» | панель открыта как `localhost`; в панели впишите адрес компьютера в сети |
 | «frontend/dist не собран» | `python demo.py prepare` |

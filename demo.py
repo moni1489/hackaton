@@ -61,6 +61,25 @@ def port_busy(host: str, port: int) -> bool:
         return s.connect_ex(("127.0.0.1" if host in ("0.0.0.0", "") else host, port)) == 0
 
 
+def codespaces_url(port: int) -> str | None:
+    """В GitHub Codespaces порт снаружи виден по адресу вида https://<имя>-<порт>.app.github.dev,
+    а внутренний IP (10.x) недоступен ни телефонам, ни браузеру ведущего."""
+    name, domain = os.environ.get("CODESPACE_NAME"), os.environ.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
+    return f"https://{name}-{port}.{domain}" if name and domain else None
+
+
+def viewer_base(port: int, override: str | None = None) -> str:
+    """Адрес, который откроют зрители: заданный вручную → Codespaces → адрес в локальной сети."""
+    return override or codespaces_url(port) or f"http://{lan_ip()}:{port}"
+
+
+def codespaces_hint(port: int) -> None:
+    if codespaces_url(port):
+        say(f"GitHub Codespaces: откройте вкладку PORTS, у порта {port} выберите Port Visibility → Public —\n"
+            "  иначе телефоны зрителей (без входа в GitHub) ссылку не откроют. Или: "
+            f"gh codespace ports visibility {port}:public -c $CODESPACE_NAME")
+
+
 def lan_ip() -> str:
     """Адрес компьютера в локальной сети — работает без интернета (пакеты не отправляются)."""
     try:
@@ -259,8 +278,7 @@ def cmd_up(args) -> None:
         cmd_prepare(args)
     else:
         prepare_db(args)
-    host_ip = lan_ip()
-    public_url = args.public_url or env.get("DEMO_PUBLIC_URL") or f"http://{host_ip}:{args.port}"
+    public_url = viewer_base(args.port, args.public_url or env.get("DEMO_PUBLIC_URL"))
     server_env = {"DEMO_MODE": "true", "DEMO_PUBLIC": "true" if args.public else "false",
                   "EXTERNAL_POLL_ENABLED": "false", "DEMO_PUBLIC_URL": public_url}
     if not args.main_db:
@@ -277,6 +295,7 @@ def cmd_up(args) -> None:
     try:
         wait_ready(local)
         say(f"Панель ведущего:  {public_url}/demo")
+        codespaces_hint(args.port)
         if not args.no_session:
             data = new_session(local, public_url)
             say(f"Сессия создана: {data['session_id']}")
@@ -296,8 +315,10 @@ def cmd_up(args) -> None:
 
 def cmd_session(args) -> None:
     base = args.url.rstrip("/")
-    data = new_session(base, args.public_url)
+    port = urllib.parse.urlsplit(base).port or 8000
+    data = new_session(base, viewer_base(port, args.public_url))
     say(f"Сессия: {data['session_id']}")
+    codespaces_hint(port)
     show_link(data["link"])
 
 
@@ -354,7 +375,7 @@ def cmd_check(args) -> None:
             line(True, "вход ведущего работает")
         except SystemExit as exc:
             line(False, f"вход ведущего: {exc}")
-        say(f"  адрес для зрителей: http://{lan_ip()}:{urllib.parse.urlsplit(base).port or 8000}")
+        say(f"  адрес для зрителей: {viewer_base(urllib.parse.urlsplit(base).port or 8000)}")
     except (SystemExit, OSError):
         line(False, "сервер не запущен (python demo.py up) — это нормально до старта", fatal=False)
     say("\n" + ("ГОТОВО К ПОКАЗУ" if not bad else f"НЕ ГОТОВО: {len(bad)} замечаний"))
