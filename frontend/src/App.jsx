@@ -92,6 +92,17 @@ function Dashboard({ user, onLogout }) {
     api.schools({ region, provider, status, search }).then(setSchools).catch(() => setSchools([]));
   }, [region, provider, status, search, demo]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const did = params.get('device');
+    const sid = params.get('school');
+    if (did) {
+      setDeviceDrawer(did);
+    } else if (sid) {
+      setSchoolDrawer(Number(sid));
+    }
+  }, []);
+
   // ⌘K / Ctrl+K — фокус в поиск
   useEffect(() => {
     const onKey = (event) => {

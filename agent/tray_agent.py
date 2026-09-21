@@ -567,10 +567,13 @@ class StatusWindow(tk.Toplevel):
 
         panel_url = os.environ.get("VKO_FRONTEND", "https://hackatondsa.vercel.app")
         def _open_panel():
-            try:
-                subprocess.Popen(["xdg-open", panel_url])
-            except Exception:
+            if platform.system() == "Windows":
                 webbrowser.open(panel_url)
+            else:
+                try:
+                    subprocess.Popen(["xdg-open", panel_url])
+                except Exception:
+                    webbrowser.open(panel_url)
 
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=(16, 0))
