@@ -225,6 +225,7 @@ class Access(Base):
     def test_operator_actions_are_audited_and_chain_is_valid(self):
         s = Session()
         s.act("start")
+        httpx.post(f"{BASE}/api/demo/sessions/{s.sid}/link", json={}, headers=s.op)
         s.close()
         with database.SessionLocal() as db:
             actions = [a.action for a in db.query(AuditLog).filter(AuditLog.action.like("demo.%"))]
