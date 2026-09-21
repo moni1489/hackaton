@@ -282,16 +282,7 @@ function Dashboard({ user, onLogout }) {
             </div>
 
             <div className={`work ${mapCollapsed ? 'no-map' : ''}`}>
-              {mapCollapsed ? (
-                // Карта размонтирована (Mapbox не рендерится): от неё остаётся
-                // только вертикальный корешок, правая колонка занимает всю ширину.
-                <button className="stage-stub" onClick={() => setMapCollapsed(false)}
-                  title="Развернуть карту области">
-                  <IcoMap size={16} />
-                  <span>Карта области · развернуть</span>
-                  <IcoChevron style={{ transform: 'rotate(-90deg)' }} />
-                </button>
-              ) : (
+              {mapCollapsed ? null : (
                 <div className="stage">
                   <MapView schools={schools} mode={mapMode} selectedId={selectedId}
                     onSelect={setSelectedId} onOpenSchool={openSchool} />

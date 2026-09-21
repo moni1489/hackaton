@@ -259,17 +259,6 @@ a { color: inherit; text-decoration: none; }
 
 /* Свёрнутая карта: Mapbox размонтирован, от полотна остаётся корешок,
    а правая колонка занимает всю рабочую область. */
-.stage-stub {
-  flex: 0 0 46px; width: 46px; background: var(--surface);
-  border-right: 1px solid var(--line); color: var(--ink-3);
-  display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 0;
-}
-.stage-stub:hover { background: var(--surface-2); color: var(--accent); }
-.stage-stub span {
-  writing-mode: vertical-rl; font-size: 11px; font-weight: 800;
-  letter-spacing: .08em; text-transform: uppercase;
-}
-.stage-stub svg { flex: 0 0 auto; }
 .work.no-map .rail { flex: 1 1 auto; width: auto; }
 
 .stage-collapsed {
@@ -536,5 +525,4 @@ table.grid code { font-family: var(--mono); font-size: 11.5px; background: var(-
   .brand-text, .nav-item span, .user-meta, .nav-collapse span { display: none; }
   .nav-item, .nav-collapse { justify-content: center; }
   .work.no-map .rail { display: flex; }
-  .work.no-map .stage-stub { flex: 0 0 36px; width: 36px; }
 }

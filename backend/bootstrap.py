@@ -6,9 +6,7 @@
 import random
 from datetime import datetime, timedelta
 
-from sqlalchemy import inspect, text
-
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal, migrate_schema as _migrate
 from app.models import Device, FaultEvent, Incident, Measurement, School, User
 from app.security import fingerprint, hash_password
 from app.services.ml.train import train_models
@@ -29,23 +27,8 @@ LINKS = ["Ethernet 1 Гбит/с", "Ethernet 100 Мбит/с", "Wi-Fi 5 (802.11a
 
 
 def migrate_schema() -> None:
-    """Добавляет колонки, появившиеся в модели, в уже существующие таблицы."""
-    Base.metadata.create_all(bind=engine)
-    inspector = inspect(engine)
-    type_map = {"INTEGER": "INTEGER", "VARCHAR": "VARCHAR", "FLOAT": "FLOAT",
-                "BOOLEAN": "BOOLEAN", "DATETIME": "DATETIME", "TEXT": "TEXT"}
-    with engine.begin() as conn:
-        for table in Base.metadata.sorted_tables:
-            if table.name not in inspector.get_table_names():
-                continue
-            existing = {c["name"] for c in inspector.get_columns(table.name)}
-            for column in table.columns:
-                if column.name in existing:
-                    continue
-                sql_type = type_map.get(str(column.type).split("(")[0].upper(), "VARCHAR")
-                conn.execute(text(
-                    f'ALTER TABLE {table.name} ADD COLUMN "{column.name}" {sql_type}'))
-                print(f"  + {table.name}.{column.name}")
+    for name in _migrate():
+        print(f"  + {name}")
 
 
 def seed_users(db) -> None:
