@@ -3,6 +3,8 @@
 Статус школы = статус её ОСНОВНОЙ линии, измеренной точкой мониторинга (Device с line_id).
 Резервная линия ведётся отдельно и школу не «красит». Рабочие места оцениваются отдельно.
 """
+from sqlalchemy import select
+
 from ..models import Device, Line, School, Threshold
 from .status import Thresholds, classify
 
@@ -27,6 +29,12 @@ def contracts(db, device: Device) -> tuple[float | None, float | None]:
         return line.contract_speed_down, line.contract_speed_up
     school = db.get(School, device.school_id)
     return (school.contract_speed_down, school.contract_speed_up) if school else (None, None)
+
+
+def main_monitors():
+    """Подзапрос: device_id точек мониторинга ОСНОВНЫХ линий — по ним судят о канале школы."""
+    return (select(Device.device_id).join(Line, Line.id == Device.line_id)
+            .where(Line.role == "main"))
 
 
 def main_line(db, school_id: int) -> Line | None:

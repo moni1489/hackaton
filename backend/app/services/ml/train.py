@@ -17,12 +17,14 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from ...models import FaultEvent, Measurement, School
+from ..lines import main_monitors
 from . import baseline
 from .features import (ATTRIBUTION_FEATURES, CAUSES, FORECAST_FEATURES, Topology,
                        attribution_features, breach_in_window, forecast_features)
 from .linmodel import MODELS_DIR, SoftmaxRegression, evaluate
 
-Row = namedtuple("Row", "device_id school_id timestamp download_speed ping packet_loss is_offline")
+Row = namedtuple("Row", "device_id school_id timestamp download_speed upload_speed ping jitter "
+                        "packet_loss is_offline")
 
 SLOT_MINUTES = 30
 ATTR_EVERY_SLOTS = 3     # снимок для атрибуции раз в 1.5 часа
@@ -34,8 +36,8 @@ HORIZON_H = 6
 
 def _load_rows(db: Session) -> list[Row]:
     query = db.query(Measurement.device_id, Measurement.school_id, Measurement.timestamp,
-                     Measurement.download_speed, Measurement.ping, Measurement.packet_loss,
-                     Measurement.is_offline)
+                     Measurement.download_speed, Measurement.upload_speed, Measurement.ping,
+                     Measurement.jitter, Measurement.packet_loss, Measurement.is_offline)
     return [Row(*r) for r in query.yield_per(10000) if r[2] is not None]
 
 
@@ -145,7 +147,8 @@ def build_forecast_set(db: Session, rows: list[Row], by_slot, topo: Topology) ->
             if vector is None:
                 continue
             breach = breach_in_window(history, ts, ts + timedelta(hours=HORIZON_H),
-                                      school.contract_speed_down or 100.0)
+                                      school.contract_speed_down or 100.0,
+                                      school.contract_speed_up)
             X.append(vector)
             y.append("breach" if breach else "stable")
     return X, y
@@ -198,7 +201,9 @@ def train_models(db: Session, *, rebuild_baseline: bool = True) -> dict:
               f"{model.metrics['accuracy']}, macro-F1 {model.metrics['macro_f1']}")
 
     # --- модель прогноза --------------------------------------------------
-    Xf, yf = build_forecast_set(db, rows, by_slot, topo)
+    # Прогноз — о канале школы, поэтому по замерам точек мониторинга основных линий.
+    monitors = {d for (d,) in db.execute(main_monitors())}
+    Xf, yf = build_forecast_set(db, [r for r in rows if r.device_id in monitors], by_slot, topo)
     if len(set(yf)) < 2:
         print("  прогноз: один класс в выборке — модель не обучена")
     else:

@@ -7,7 +7,7 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..cache import backend_name, cache_get, cache_set, rate_limit_ok
@@ -18,12 +18,13 @@ from ..security import (
     FULL_SCOPE_ROLES, can_access_school, current_user, require_roles, scope_key, scope_schools,
     verify_audit_chain, write_audit,
 )
+from ..services.lines import main_monitors
 from ..services.ml.features import CAUSE_LABELS, CAUSE_OWNER
 from ..services.predictive import analyze, region_overview
 from ..services.smart_sync import stats as sync_stats
 from ..services.status import (
-    ALL_STATUSES, STATUS_NO_DATA, STATUS_OFFLINE, STATUS_OK, effective_status, freshness,
-    is_fresh, naive_utc, thresholds,
+    ALL_STATUSES, STATUS_NO_DATA, STATUS_OFFLINE, effective_status, freshness, is_fresh,
+    naive_utc, thresholds,
 )
 
 router = APIRouter(prefix="/api/web", tags=["Web API"])
@@ -423,11 +424,9 @@ def trend(hours: int = 24, as_of: datetime | None = None, db: Session = Depends(
     cached = cache_get(key)
     if cached is not None:
         return cached
-    monitors = (select(Device.device_id).join(Line, Line.id == Device.line_id)
-                .where(Line.role == "main"))
     query = db.query(Measurement).filter(
         Measurement.timestamp >= now - timedelta(hours=hours), Measurement.timestamp <= now,
-        Measurement.device_id.in_(monitors))
+        Measurement.device_id.in_(main_monitors()))
     rows = _limit(query, Measurement.school_id, _school_ids(db, user)).all()
     buckets: dict[str, list] = {}
     for r in rows:

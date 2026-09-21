@@ -13,10 +13,11 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from statistics import mean, pstdev
 
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..models import Device, Line, Measurement, School
+from ..models import Measurement, School
+from .lines import main_monitors
 from .status import (BAD_STATUSES, effective_status, is_sla_violation, speed_floor,
                      thresholds)
 
@@ -34,9 +35,7 @@ def _rows(db: Session, school_id: int, device_id: str | None, days: int,
     if device_id:
         query = query.filter(Measurement.device_id == device_id)
     else:
-        query = query.filter(Measurement.device_id.in_(
-            select(Device.device_id).join(Line, Line.id == Device.line_id)
-            .where(Line.role == "main")))
+        query = query.filter(Measurement.device_id.in_(main_monitors()))
     return query.order_by(Measurement.timestamp.asc()).all()
 
 
