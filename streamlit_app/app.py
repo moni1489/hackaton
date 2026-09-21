@@ -74,8 +74,8 @@ def band(probability: float) -> str:
     return "критическая"
 
 
-st.set_page_config(page_title="САМ ВКО · ML-демо", page_icon="📡", layout="wide")
-st.title("📡 САМ ВКО — демо ML-моделей")
+st.set_page_config(page_title="САМ ВКО · ML-демо", layout="wide")
+st.title("САМ ВКО — демо ML-моделей")
 st.caption("«Виновник» деградации канала и прогноз выхода за SLA на 6 часов вперёд.")
 
 with st.sidebar:
@@ -98,7 +98,7 @@ with st.sidebar:
         values["hour_sin"] = math.sin(2 * math.pi * hour / 24)
         values["hour_cos"] = math.cos(2 * math.pi * hour / 24)
 
-    run = st.button("🔮 Запустить предсказание", use_container_width=True, type="primary")
+    run = st.button("Запустить предсказание", use_container_width=True, type="primary")
 
 model = load_model(model_name)
 if model is None:

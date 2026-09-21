@@ -6,7 +6,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Качество связи", page_icon="📡", layout="wide")
+st.set_page_config(page_title="Качество связи", layout="wide")
 
 # палитра и шрифты — из frontend/src/index.css
 C = dict(accent="#2F6BF6", ok="#17A65B", warn="#E4962A", danger="#E0453E", violet="#7C5CF0",
