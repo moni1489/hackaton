@@ -193,3 +193,47 @@ class FaultEvent(Base):
     origin = Column(String, default="simulator")   # simulator | operator
 
     __table_args__ = (Index("ix_fault_window", "start_time", "end_time"),)
+
+
+class OfficialSchool(Base):
+    """Справочник eGov. Не подменяет действующие школы с агентами без сверки ID."""
+    __tablename__ = "official_schools"
+    external_id = Column(String, primary_key=True)
+    district = Column(String, index=True)
+    settlement = Column(String)
+    address = Column(String)
+    lat = Column(Float)
+    lng = Column(Float)
+    students = Column(Integer)
+    source_url = Column(String)
+    fetched_at = Column(DateTime)
+    raw_json = Column(Text)
+
+
+class PublishedConnection(Base):
+    """Опубликованная характеристика, не договор и не измерение агента."""
+    __tablename__ = "published_connections"
+    key = Column(String, primary_key=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
+    school_name = Column(String)
+    district = Column(String)
+    technology = Column(String)
+    speed_down_mbps = Column(Float, nullable=True)
+    source_url = Column(String)
+    source_date = Column(String, nullable=True)
+    retrieved_at = Column(DateTime)
+    note = Column(Text)
+
+
+class ExternalSourceState(Base):
+    """Последний успешный снимок и состояние последней попытки обновления."""
+    __tablename__ = "external_source_states"
+    source = Column(String, primary_key=True)
+    status = Column(String)
+    attempted_at = Column(DateTime)
+    fetched_at = Column(DateTime, nullable=True)
+    window_start = Column(DateTime, nullable=True)
+    window_end = Column(DateTime, nullable=True)
+    source_url = Column(String)
+    error = Column(Text, nullable=True)
+    payload_json = Column(Text, default="{}")
