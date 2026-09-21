@@ -6,7 +6,7 @@
 from sqlalchemy import select
 
 from ..models import Device, Line, School, Threshold
-from .status import Thresholds, classify
+from .status import Thresholds, classify, reset_thresholds
 
 ROLES = ("main", "backup", "disabled")
 
@@ -69,6 +69,8 @@ def ensure_defaults(db) -> None:
                          ping_max=t.ping_max, jitter_max=t.jitter_max, loss_max=t.loss_max,
                          availability_min=t.availability_min, contract_ratio=t.contract_ratio,
                          incident_after=t.incident_after, stale_after_min=t.stale_after_min))
+        db.commit()          # версия должна быть видна classify() ниже — иначе замеры уйдут без threshold_id
+        reset_thresholds()
     db.query(Device).filter(Device.last_measured.is_(None), Device.last_seen.isnot(None)) \
         .update({Device.last_measured: Device.last_seen}, synchronize_session=False)
 

@@ -35,8 +35,9 @@ h2, h3 {{ letter-spacing:-.02em; font-weight:800; }}
 </style>""", unsafe_allow_html=True)
 
 DB = Path(__file__).resolve().parent.parent.parent / "backend" / "hackathon.db"
-# пороги SLA — зеркало backend/app/config.py (SLA_*)
-SPEED_RATIO, PING_MS, LOSS_PCT = 0.6, 80.0, 2.0
+# пороги — зеркало backend/app/config.py (ТЗ п.11); рабочие значения админ меняет в БД (thresholds)
+SPEED_RATIO, PING_MS, LOSS_PCT = 0.6, 100.0, 2.0
+DOWN_MIN, UP_MIN, JITTER_MS = 20.0, 20.0, 30.0
 
 # нижняя граница доли замеров в SLA -> (категория, пояснение)
 BANDS = [
@@ -48,6 +49,7 @@ BANDS = [
 
 # CASE-выражение «замер нарушает SLA»
 VIOLATION = f"""(m.is_offline = 1 OR m.ping > {PING_MS} OR m.packet_loss > {LOSS_PCT}
+    OR m.jitter > {JITTER_MS} OR m.upload_speed < {UP_MIN} OR m.download_speed < {DOWN_MIN}
     OR m.download_speed < {SPEED_RATIO} * s.contract_speed_down)"""
 
 

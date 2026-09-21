@@ -4,13 +4,180 @@ import { api } from './api';
 import { causeUi } from './Diagnostics';
 import { IcoDoc, IcoPc, IcoQueue, IcoRefresh, IcoSchool, IcoShield, IcoUsers } from './icons';
 import {
-  Pair, Section, StatusCell, Tag, deviceMeta, fmtDateTime, fmtInterval,
+  Pair, Section, StatusCell, Tag, deviceMeta, fmtAge, fmtDateTime, fmtInterval, fmtStamp,
 } from './ui';
+
+/* ---------- Выгрузка результатов (ТЗ п.9) --------------------------- */
+const EXPORT_FIELDS = [
+  ['school', 'Школа'], ['school_id', 'School ID'], ['district', 'Район'], ['provider', 'Поставщик'],
+  ['device_id', 'Device ID'], ['device_name', 'Компьютер'], ['room', 'Кабинет'], ['role', 'Роль ПК'],
+  ['date', 'Дата'], ['time', 'Время'], ['download', 'Download'], ['upload', 'Upload'],
+  ['ping', 'Ping'], ['jitter', 'Jitter'], ['packet_loss', 'Packet Loss'], ['status', 'Статус'],
+  ['thresholds', 'Версия порогов'],
+];
+const EXPORT_DEFAULT = ['school', 'school_id', 'device_id', 'room', 'date', 'time', 'download',
+  'upload', 'ping', 'jitter', 'packet_loss', 'status'];
+
+function ExportPanel({ schools }) {
+  const [schoolId, setSchoolId] = useState('');
+  const [devices, setDevices] = useState([]);
+  const [deviceIds, setDeviceIds] = useState([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [format, setFormat] = useState('xlsx');
+  const [aggregate, setAggregate] = useState(false);
+  const [fields, setFields] = useState(EXPORT_DEFAULT);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setDeviceIds([]);
+    if (!schoolId) { setDevices([]); return; }
+    api.devices({ school_id: schoolId }).then(setDevices).catch(() => setDevices([]));
+  }, [schoolId]);
+
+  const toggle = (key) => setFields((cur) => (
+    cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
+
+  const run = async () => {
+    setBusy(true); setError('');
+    try {
+      await api.exportMeasurements({
+        format, school_id: schoolId, device_id: deviceIds, date_from: dateFrom, date_to: dateTo,
+        status: statusFilter, aggregate, fields: aggregate ? '' : fields.join(','),
+      }, `measurements${aggregate ? '_summary' : ''}.${format}`);
+    } catch (e) { setError(e.message); }
+    setBusy(false);
+  };
+
+  return (
+    <div className="page-card" style={{ marginBottom: 14 }}>
+      <div className="page-card-head">
+        <IcoDoc size={17} style={{ color: 'var(--accent)' }} />
+        <h3>Выгрузка результатов измерений</h3>
+        <Tag kind="off" className="tag ml">CSV · XLSX</Tag>
+      </div>
+      <div className="form-grid">
+        <label>Школа
+          <select value={schoolId} onChange={(e) => setSchoolId(e.target.value)}>
+            <option value="">Все в области видимости</option>
+            {schools.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+        <label>Компьютеры (несколько — Ctrl)
+          <select multiple size={3} value={deviceIds} disabled={!schoolId}
+            onChange={(e) => setDeviceIds(Array.from(e.target.selectedOptions, (o) => o.value))}>
+            {devices.map((d) => <option key={d.device_id} value={d.device_id}>{d.device_id}</option>)}
+          </select>
+        </label>
+        <label>Период с<input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
+        <label>по<input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></label>
+        <label>Статус соединения
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">Любой</option>
+            {['Норма', 'Нестабильно', 'Критично', 'Нет соединения'].map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </label>
+        <label>Формат
+          <select value={format} onChange={(e) => setFormat(e.target.value)}>
+            <option value="xlsx">XLSX</option><option value="csv">CSV</option>
+          </select>
+        </label>
+        <label className="check wide">
+          <input type="checkbox" checked={aggregate} onChange={(e) => setAggregate(e.target.checked)} />
+          Сводка по школам: замеров, средний и минимальный Download, средний Upload и Ping,
+          проблемных замеров и их доля, случаев отсутствия интернета
+        </label>
+        {!aggregate ? (
+          <div className="wide">
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Параметры в выгрузке</div>
+            <div className="check-row">
+              {EXPORT_FIELDS.map(([key, label]) => (
+                <label key={key} className="check">
+                  <input type="checkbox" checked={fields.includes(key)} onChange={() => toggle(key)} />{label}
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="wide" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <button className="btn accent" style={{ flex: 'none' }} onClick={run}
+            disabled={busy || (!aggregate && !fields.length)}>
+            {busy ? 'Формирую…' : 'Выгрузить'}
+          </button>
+          <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
+            Время в файле — UTC. До 100 000 строк: при превышении сузьте период или возьмите сводку.
+          </span>
+          {error ? <span style={{ color: 'var(--danger)', fontSize: 12 }}>{error}</span> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Пороги качества (ТЗ п.11, п.20) -------------------------- */
+const THRESHOLD_FIELDS = [
+  ['down_min', 'Download не менее, Мбит/с'], ['up_min', 'Upload не менее, Мбит/с'],
+  ['ping_max', 'Ping не более, мс'], ['jitter_max', 'Jitter не более, мс'],
+  ['loss_max', 'Потери пакетов не более, %'], ['availability_min', 'Доступность не менее, %'],
+  ['contract_ratio', 'Доля договорной скорости (0–1)'],
+  ['incident_after', 'Инцидент после N плохих замеров подряд'],
+  ['stale_after_min', 'Данные не свежие старше, мин'],
+];
+
+function ThresholdsPanel({ canEdit }) {
+  const [active, setActive] = useState(null);
+  const [form, setForm] = useState({});
+  const [history, setHistory] = useState([]);
+  const [message, setMessage] = useState('');
+
+  const load = () => api.thresholds().then((data) => {
+    setActive(data.active); setForm(data.active); setHistory(data.history);
+  }).catch((e) => setMessage(e.message));
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    setMessage('');
+    try {
+      const body = Object.fromEntries(THRESHOLD_FIELDS.map(([key]) => [key, Number(form[key])]));
+      await api.setThresholds(body);
+      setMessage('Сохранено: новая версия порогов действует для новых замеров.');
+      await load();
+    } catch (e) { setMessage(e.message); }
+  };
+
+  if (!active) return null;
+  return (
+    <div className="page-card">
+      <div className="form-grid">
+        {THRESHOLD_FIELDS.map(([key, label]) => (
+          <label key={key}>{label}
+            <input type="number" step="any" value={form[key] ?? ''} disabled={!canEdit}
+              onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+          </label>
+        ))}
+        <div className="wide" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {canEdit ? (
+            <button className="btn accent" style={{ flex: 'none' }} onClick={save}>Сохранить новую версию</button>
+          ) : null}
+          <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
+            Действует версия #{active.id}. Каждый замер хранит версию порогов, по которой оценён;
+            прошлые оценки задним числом не пересчитываются
+            {history.length ? ` · версий: ${history.length}` : ''}.
+          </span>
+          {message ? <span style={{ fontSize: 12, color: 'var(--ink-2)' }}>{message}</span> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ---------- Школы ------------------------------------------------- */
 export function SchoolsPage({ schools, onOpenSchool }) {
   return (
     <div className="page">
+      <ExportPanel schools={schools} />
       <div className="page-card">
         <div className="page-card-head">
           <IcoSchool size={17} style={{ color: 'var(--accent)' }} />
@@ -22,7 +189,7 @@ export function SchoolsPage({ schools, onOpenSchool }) {
             <thead>
               <tr>
                 <th>Код</th><th>Наименование</th><th>Район</th><th>Поставщик</th>
-                <th>Линия</th><th>↓ факт</th><th>Договор</th><th>Ping</th><th>Статус</th>
+                <th>Линия</th><th>↓ факт</th><th>Договор</th><th>Ping</th><th>Замер</th><th>Статус</th>
               </tr>
             </thead>
             <tbody>
@@ -33,9 +200,13 @@ export function SchoolsPage({ schools, onOpenSchool }) {
                   <td>{school.region}</td>
                   <td>{school.provider}</td>
                   <td style={{ fontSize: 12, color: 'var(--ink-2)' }}>{school.connection_type}</td>
-                  <td className="num">{school.current_download}</td>
+                  <td className="num">{school.is_stale ? '—' : school.current_download}</td>
                   <td className="num" style={{ color: 'var(--ink-3)' }}>{school.contract_speed_down}</td>
-                  <td className="num">{school.current_ping}</td>
+                  <td className="num">{school.is_stale ? '—' : school.current_ping}</td>
+                  <td className="num" style={{ fontSize: 12, color: school.is_stale ? 'var(--warn)' : 'var(--ink-2)' }}
+                    title={fmtStamp(school.last_measurement)}>
+                    {school.last_measurement ? `${fmtAge(school.age_min)} назад` : 'не было'}
+                  </td>
                   <td><StatusCell status={school.status} /></td>
                 </tr>
               ))}
@@ -270,6 +441,13 @@ export function AdminPage({ role }) {
         </div>
       </div>
 
+      {role === 'admin' || role === 'operator' ? (
+        <>
+          <Section title="Пороги качества соединения" />
+          <ThresholdsPanel canEdit={role === 'admin'} />
+        </>
+      ) : null}
+
       <Section title="Политики безопасности" />
       <div className="block">
         <Pair label="Транспорт">{policy?.transport}</Pair>
@@ -358,7 +536,7 @@ export function AdminPage({ role }) {
                     <td><Tag kind={user.role === 'admin' ? 'info' : 'off'}>{user.role}</Tag></td>
                     <td style={{ fontSize: 12, color: 'var(--ink-2)' }}>
                       {user.school_id ? `школа #${user.school_id}`
-                        : user.provider_name || 'вся область'}
+                        : user.provider_name || user.district || 'вся область'}
                     </td>
                     <td>{user.is_active ? 'да' : 'нет'}</td>
                   </tr>

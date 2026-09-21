@@ -40,7 +40,7 @@ from app.services.status import (  # noqa: E402
 )
 
 NOW = datetime.utcnow().replace(microsecond=0)
-CLIENT: TestClient
+CLIENT = None   # TestClient, создаётся в setUpModule
 TOKENS: dict[str, dict] = {}
 HW = {"mac": "AA:BB", "cpu": "cpu", "os": "os"}    # оборудование для перерегистрации
 

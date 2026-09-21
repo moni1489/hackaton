@@ -106,12 +106,6 @@ def assess(cause: str, ctx: dict) -> dict:
             "devices_with_data": devices}
 
 
-def _quoted(name: str | None) -> str:
-    """Названия операторов уже содержат кавычки — не вкладываем их повторно."""
-    name = name or "—"
-    return name if "«" in name else f"«{name}»"
-
-
 def _narrative(cause: str, school: School, ctx: dict, quality: dict, hint: str | None = None) -> str:
     """Формулировка для оператора и для приложения к претензии. Везде — предположение."""
     total    = ctx.get("devices_total", 1)
