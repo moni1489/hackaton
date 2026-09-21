@@ -2,18 +2,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
 import {
-  IcoAlert, IcoLayers, IcoNodes, IcoPc, IcoRefresh, IcoRouter, IcoShield, IcoTrend, IcoWifi,
+  IcoAlert, IcoClock, IcoLayers, IcoNodes, IcoPc, IcoRefresh, IcoRouter, IcoShield, IcoTrend, IcoWifi,
 } from './icons';
-import { Pair, Section, Tag, fmtDateTime } from './ui';
+import { Pair, Section, Tag, fmtAge, fmtDateTime, fmtStamp } from './ui';
 
 /* Оформление вердикта: свой цвет и знак на каждый уровень поражения. */
 export const CAUSE_UI = {
   regional: { tag: 'danger', Icon: IcoLayers, short: 'Магистраль района' },
   provider_node: { tag: 'danger', Icon: IcoNodes, short: 'Узел провайдера' },
-  school_lan: { tag: 'warn', Icon: IcoRouter, short: 'ЛВС школы' },
+  school_lan: { tag: 'warn', Icon: IcoRouter, short: 'Уровень школы' },
   device: { tag: 'info', Icon: IcoWifi, short: 'Отдельный ПК' },
+  undetermined: { tag: 'off', Icon: IcoShield, short: 'Не определён' },
+  no_data: { tag: 'stale', Icon: IcoClock, short: 'Нет данных' },
   none: { tag: 'off', Icon: IcoShield, short: 'Не подтверждено' },
 };
+/* Достаточность данных для вывода: 2 — достаточно, 1 — ограниченно, 0 — недостаточно. */
+export const QUALITY_TAG = { 2: 'ok', 1: 'warn', 0: 'danger' };
 export const causeUi = (cause) => CAUSE_UI[cause] || CAUSE_UI.none;
 
 const BAND_TAG = {
@@ -50,29 +54,45 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
 
   const attr = model?.attribution;
   const fcst = model?.forecast;
+  const fr = summary?.freshness;
+  const stale = Boolean(fr?.is_stale);
 
   return (
     <div className="page">
       {error ? <div className="login-error" style={{ marginBottom: 14 }}>{error}</div> : null}
 
-      {/* ---------- Кто отвечает за текущие отклонения ---------- */}
+      {stale ? (
+        <div className="banner stale" style={{ borderRadius: 12, marginBottom: 14 }}>
+          <span>
+            <b>Нет свежих данных.</b> Последний замер: {fmtStamp(fr.last_measurement)}
+            {fr.age_min != null ? ` (${fmtAge(fr.age_min)} назад)` : ''}. Пустая доска вердиктов и
+            очередь прогноза означают отсутствие данных, а не отсутствие отклонений.
+          </span>
+        </div>
+      ) : null}
+
+      {/* ---------- Предполагаемые источники текущих отклонений ---------- */}
       <div className="kpi-strip" style={{ marginBottom: 14 }}>
         <div className="kpi">
           <div className="kpi-head"><span className="eyebrow">Организаций в отклонении</span></div>
           <div className="kpi-value">{summary?.total_affected ?? '—'}</div>
         </div>
         <div className="kpi">
-          <div className="kpi-head"><span className="eyebrow">Зона провайдера</span></div>
+          <div className="kpi-head"><span className="eyebrow">Предположительно провайдер</span></div>
           <div className="kpi-value" style={{ color: 'var(--danger)' }}>
             {summary?.provider_side ?? '—'}
             <small style={{ marginLeft: 6 }}>{summary ? `${summary.provider_share_pct}%` : ''}</small>
           </div>
         </div>
         <div className="kpi">
-          <div className="kpi-head"><span className="eyebrow">Зона организации</span></div>
+          <div className="kpi-head"><span className="eyebrow">Предположительно организация</span></div>
           <div className="kpi-value" style={{ color: 'var(--warn)' }}>
             {summary?.school_side ?? '—'}
           </div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-head"><span className="eyebrow">Источник не определён</span></div>
+          <div className="kpi-value">{summary?.undetermined ?? '—'}</div>
         </div>
         <div className="kpi">
           <div className="kpi-head"><span className="eyebrow">Прогноз пробоя SLA</span></div>
@@ -87,7 +107,7 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
         <div className="page-card">
           <div className="page-card-head">
             <IcoNodes size={17} style={{ color: 'var(--accent)' }} />
-            <h3>Вердикты по текущим отклонениям</h3>
+            <h3>Предполагаемые источники по текущим отклонениям</h3>
             <Tag kind="info" className="tag ml">{board.length}</Tag>
           </div>
           <div style={{ padding: 14, maxHeight: 620, overflowY: 'auto' }}>
@@ -103,7 +123,12 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                     <div className="insight-body">
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <Tag kind={ui.tag}>{v.cause_label}</Tag>
-                        <Tag kind="off">{Math.round(v.confidence * 100)}% уверенности</Tag>
+                        <Tag kind="off">оценка модели {Math.round(v.confidence * 100)}%</Tag>
+                        {v.data_quality ? (
+                          <Tag kind={QUALITY_TAG[v.data_quality.level]}>
+                            данные: {v.data_quality.label}
+                          </Tag>
+                        ) : null}
                         {v.actionable ? <Tag kind="danger">основание для претензии</Tag> : null}
                       </div>
                       <div className="insight-title sm">{v.school_name}</div>
@@ -117,13 +142,18 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}
                       onClick={(e) => e.stopPropagation()}>
                       <p className="insight-note" style={{ marginTop: 0 }}>{v.narrative}</p>
+                      {v.data_quality?.reasons?.length ? (
+                        <p className="insight-note">
+                          <b>Ограничения данных:</b> {v.data_quality.reasons.join('; ')}.
+                        </p>
+                      ) : null}
                       <div className="mini-stats" style={{ marginTop: 10 }}>
                         <div className="mini-stat">
                           <div className="k">ПК в отклонении</div>
                           <div className="v">{v.evidence.devices_affected}/{v.evidence.devices_total}</div>
                         </div>
                         <div className="mini-stat">
-                          <div className="k">Школ провайдера в районе</div>
+                          <div className="k">Сопоставимых школ провайдера</div>
                           <div className="v">
                             {v.evidence.peers_same_provider_district_affected}/
                             {v.evidence.peers_same_provider_district}
@@ -140,7 +170,9 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                       </div>
 
                       {v.evidence.affected?.length ? (
-                        <Section title="Поражённые ПК">
+                        <>
+                        <Section title="Поражённые ПК" />
+                        <div style={{ overflowX: 'auto' }}>
                           <table className="grid">
                             <thead>
                               <tr><th>ПК</th><th>Кабинет</th><th>Линк</th><th>Просадка</th><th>z</th></tr>
@@ -159,7 +191,8 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                               ))}
                             </tbody>
                           </table>
-                        </Section>
+                        </div>
+                        </>
                       ) : null}
 
                       {v.drivers?.length ? (
@@ -181,7 +214,10 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
               );
             })}
             {!board.length && !busy
-              ? <div className="empty">Отклонений от сезонной нормы не зафиксировано.</div> : null}
+              ? <div className="empty">
+                {stale ? 'Нет свежих данных: вердикты не выносятся.'
+                  : 'Отклонений от сезонной нормы не зафиксировано.'}
+              </div> : null}
           </div>
         </div>
 
@@ -218,7 +254,9 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                 </div>
               ))}
               {!forecast.length && !busy
-                ? <div className="empty">Школ с повышенным риском нет.</div> : null}
+                ? <div className="empty">
+                  {stale ? 'Нет свежих данных: прогноз не строится.' : 'Школ с повышенным риском нет.'}
+                </div> : null}
             </div>
           </div>
 
@@ -230,22 +268,25 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                 disabled={busy} onClick={load}><IcoRefresh size={16} /></button>
             </div>
             <div style={{ padding: 14 }}>
-              <Section title="Атрибуция причины">
+              <Section title="Атрибуция причины" />
+              <div>
                 <Pair label="Версия">{attr?.version || 'не обучена'}</Pair>
                 <Pair label="Accuracy (hold-out)">{attr?.metrics?.accuracy ?? '—'}</Pair>
                 <Pair label="Macro-F1">{attr?.metrics?.macro_f1 ?? '—'}</Pair>
                 <Pair label="Обучающих примеров">{attr?.metrics?.train_samples ?? '—'}</Pair>
                 <Pair label="Классов">{attr?.classes?.length ?? '—'}</Pair>
-              </Section>
-              <Section title={`Прогноз ${fcst?.horizon_hours || 6} ч`}>
+              </div>
+              <Section title={`Прогноз ${fcst?.horizon_hours || 6} ч`} />
+              <div>
                 <Pair label="Версия">{fcst?.version || 'не обучена'}</Pair>
                 <Pair label="Accuracy (hold-out)">{fcst?.metrics?.accuracy ?? '—'}</Pair>
                 <Pair label="Macro-F1">{fcst?.metrics?.macro_f1 ?? '—'}</Pair>
                 <Pair label="Полнота по классу «пробой»">
                   {fcst?.metrics?.per_class?.breach?.recall ?? '—'}
                 </Pair>
-              </Section>
-              <Section title="Данные обучения">
+              </div>
+              <Section title="Данные обучения" />
+              <div>
                 <Pair label="Меток всего">{model?.labels?.total ?? '—'}</Pair>
                 <Pair label="От операторов">{model?.labels?.from_operators ?? '—'}</Pair>
                 <Pair label="От симулятора">{model?.labels?.from_simulator ?? '—'}</Pair>
@@ -254,7 +295,7 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
                 </Pair>
                 <Pair label="Построен">{fmtDateTime(model?.baseline?.built_at)}</Pair>
                 <Pair label="Среда">{model?.runtime}</Pair>
-              </Section>
+              </div>
               {role === 'admin' ? (
                 <button className="rail-cta" disabled={busy} onClick={retrain}>
                   <IcoRefresh size={15} />

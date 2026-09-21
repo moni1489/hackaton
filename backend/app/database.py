@@ -43,3 +43,31 @@ def get_db() -> Iterator[Session]:
         yield db
     finally:
         db.close()
+
+
+def migrate_schema() -> list[str]:
+    """Добавляет колонки, появившиеся в моделях, в уже существующие таблицы.
+
+    Вызывается при старте приложения и из bootstrap.py: новая версия кода не должна
+    падать на базе, созданной старой. Индексы и ограничения на существующих
+    таблицах не меняются (ponytail: для этого нужен Alembic).
+    """
+    from sqlalchemy import inspect, text
+
+    Base.metadata.create_all(bind=engine)
+    inspector = inspect(engine)
+    type_map = {"INTEGER": "INTEGER", "VARCHAR": "VARCHAR", "FLOAT": "FLOAT",
+                "BOOLEAN": "BOOLEAN", "DATETIME": "DATETIME", "TEXT": "TEXT"}
+    added = []
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in inspector.get_table_names():
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in existing:
+                    continue
+                sql_type = type_map.get(str(column.type).split("(")[0].upper(), "VARCHAR")
+                conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN "{column.name}" {sql_type}'))
+                added.append(f"{table.name}.{column.name}")
+    return added

@@ -3,10 +3,17 @@
 Модель доверия:
   • Веб-пользователь  → JWT (sub=user:<id>) + роль в payload.
   • Устройство-агент  → JWT (sub=device:<device_id>) + hash железа (hwfp).
-                        Токен без совпадающего hardware fingerprint отклоняется,
-                        поэтому подделать Device ID / School ID нельзя.
+                        School ID и Device ID берутся из БД/токена, а не из тела запроса,
+                        поэтому подделать их в запросе нельзя. Отпечаток в токене сверяется
+                        с записью устройства: это отсекает токены, выданные до перерегистрации
+                        на другом оборудовании. Это НЕ доказательство, что запрос пришёл с
+                        исходного ПК: hwfp лежит в токене открытым текстом, а токен вместе с
+                        файлом состояния агента можно скопировать. Привязку к железу даёт
+                        только mTLS с неэкспортируемым ключом (REQUIRE_MTLS); без него
+                        компенсирующие меры — отзыв устройства и журнал аудита.
   • mTLS              → отпечаток клиентского сертификата приходит от TLS-терминатора
-                        в заголовке X-Client-Cert-Fingerprint и сверяется с БД.
+                        в заголовке X-Client-Cert-Fingerprint и сверяется с БД. Терминатор
+                        обязан вычищать этот заголовок из входящих запросов.
 """
 import hashlib
 import hmac
@@ -17,11 +24,12 @@ from datetime import UTC, datetime, timedelta
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import false
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import get_db
-from .models import AuditLog, Device, User
+from .models import AuditLog, Device, School, User
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -111,24 +119,39 @@ def require_roles(*roles: str):
     return dependency
 
 
-def scope_schools(query, user: User, model):
-    """Изоляция данных: школа видит себя, провайдер — свои линии, админ — всё."""
+FULL_SCOPE_ROLES = ("admin", "operator")   # вся область
+
+
+def scope_schools(query, user: User):
+    """Изоляция выборки школ (запрос по School). Запрет по умолчанию: роль без своей
+    области (школа без school_id, провайдер без имени, неизвестная роль) не видит ничего."""
+    if user.role in FULL_SCOPE_ROLES:
+        return query
     if user.role == "school" and user.school_id:
-        return query.filter(model.id == user.school_id) if model.__name__ == "School" \
-            else query.filter(model.school_id == user.school_id)
+        return query.filter(School.id == user.school_id)
     if user.role == "provider" and user.provider_name:
-        if model.__name__ == "School":
-            return query.filter(model.provider == user.provider_name)
-    return query
+        return query.filter(School.provider == user.provider_name)
+    if user.role == "district" and user.district:
+        return query.filter(School.region == user.district)
+    return query.filter(false())
+
+
+def scope_key(user: User) -> str:
+    """Ключ кэша: одинаков только у пользователей с одинаковой областью видимости."""
+    if user.role in FULL_SCOPE_ROLES:
+        return "all"
+    return f"{user.role}:{user.school_id or user.provider_name or user.district or '-'}"
 
 
 def can_access_school(user: User, school) -> bool:
-    if user.role in ("admin", "operator"):
+    if user.role in FULL_SCOPE_ROLES:
         return True
     if user.role == "school":
-        return user.school_id == school.id
+        return bool(user.school_id) and user.school_id == school.id
     if user.role == "provider":
-        return user.provider_name == school.provider
+        return bool(user.provider_name) and user.provider_name == school.provider
+    if user.role == "district":
+        return bool(user.district) and user.district == school.region
     return False
 
 
@@ -150,12 +173,13 @@ def current_device(
     if not device or device.revoked:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Устройство отозвано или не зарегистрировано")
 
-    # Анти-спуфинг: токен привязан к железу. Скопированный токен на другом ПК не сработает.
+    # Токен выдан для другого отпечатка, чем записан у устройства (перерегистрация).
+    # Не защищает от копирования токена вместе с состоянием агента — см. docstring модуля.
     if device.hardware_fingerprint and payload.get("hwfp") != device.hardware_fingerprint:
         raise HTTPException(status.HTTP_403_FORBIDDEN,
-                            "Отпечаток оборудования не совпадает — попытка подмены Device ID")
+                            "Токен выдан для другого оборудования — требуется перерегистрация")
 
-    # School ID берём из БД, а не из тела запроса — подделать привязку невозможно.
+    # School ID берём из БД, а не из тела запроса.
     if payload.get("school_id") != device.school_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Привязка School ID нарушена")
 

@@ -3,6 +3,8 @@
 Модульная архитектура: Auth API · Agent API · Web API · Admin API · AI API.
 """
 import logging
+import asyncio
+from contextlib import suppress
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -11,8 +13,11 @@ from fastapi.responses import JSONResponse
 
 from .cache import backend_name
 from .config import settings
-from .database import Base, engine
-from .routers import admin, agent, ai, auth, ml, web
+from .database import SessionLocal, engine, migrate_schema
+from .routers import admin, agent, ai, auth, export, ml, web, public_data
+from .services.external_network import poll_sources
+from .services.lines import ensure_defaults
+from .services.retention import retention_loop
 from .services.smart_sync import start_workers, stats, stop_workers
 
 logging.basicConfig(level=logging.INFO,
@@ -22,11 +27,25 @@ log = logging.getLogger("app")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    for column in migrate_schema():
+        log.info("Миграция схемы: + %s", column)
+    with SessionLocal() as db:
+        ensure_defaults(db)
     await start_workers()
+    external_task = asyncio.create_task(poll_sources()) if settings.EXTERNAL_POLL_ENABLED else None
+    retention_task = asyncio.create_task(retention_loop())
     log.info("Запуск: БД=%s, кэш=%s", engine.dialect.name, backend_name())
-    yield
-    await stop_workers()
+    try:
+        yield
+    finally:
+        retention_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await retention_task
+        if external_task:
+            external_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await external_task
+        await stop_workers()
 
 
 app = FastAPI(
@@ -78,9 +97,11 @@ async def unhandled(request: Request, exc: Exception):
 app.include_router(auth.router)
 app.include_router(agent.router)
 app.include_router(web.router)
+app.include_router(export.router)
 app.include_router(admin.router)
 app.include_router(ai.router)
 app.include_router(ml.router)
+app.include_router(public_data.router)
 
 
 @app.get("/", tags=["Web API"], summary="Health-check")

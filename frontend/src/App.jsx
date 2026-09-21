@@ -1,37 +1,42 @@
 /* Оболочка панели: карта области, карточка школы и ПК-уровень прослеживания. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, clearSession, getToken, getUser } from './api';
+import { api, clearSession, getToken, getUser, setAsOf } from './api';
 import { Spark } from './Charts';
 import DeviceDrawer from './DeviceDrawer';
 import Login from './Login';
 import MapView from './MapView';
 import DiagnosticsPage from './Diagnostics';
+import PublicDataPage from './PublicData';
+import RatingPage from './Rating';
 import { AdminPage, DevicesPage, IncidentsPage, SchoolsPage } from './Pages';
 import Rail from './Rail';
 import SchoolDrawer from './SchoolDrawer';
 import {
   IcoAlert, IcoBell, IcoCal, IcoChevron, IcoClock, IcoDown, IcoGear, IcoLayers,
-  IcoLogout, IcoMap, IcoNodes, IcoPc, IcoPulse, IcoSchool, IcoSearch,
+  IcoLogout, IcoMap, IcoNodes, IcoPc, IcoPulse, IcoSchool, IcoSearch, IcoTrend,
 } from './icons';
-import { STATUS } from './ui';
+import { STATUS, fmtAge, fmtStamp } from './ui';
 
 const NAV = [
   { key: 'map', label: 'Карта области', Icon: IcoMap },
   { key: 'schools', label: 'Школы', Icon: IcoSchool },
+  { key: 'rating', label: 'Рейтинг', Icon: IcoTrend },
   { key: 'devices', label: 'ПК-агенты', Icon: IcoPc },
   { key: 'diagnostics', label: 'Диагностика', Icon: IcoNodes },
+  { key: 'public-data', label: 'Открытые данные', Icon: IcoLayers },
   { key: 'incidents', label: 'Инциденты', Icon: IcoAlert },
   { key: 'admin', label: 'Управление', Icon: IcoGear },
 ];
 
 const TITLES = {
-  map: 'Мониторинг', schools: 'Школы', devices: 'ПК-агенты',
+  'public-data': 'Открытые данные и внешняя проверка',
+  map: 'Мониторинг', schools: 'Школы', rating: 'Рейтинг организаций', devices: 'ПК-агенты',
   diagnostics: 'Диагностика · кто виноват', incidents: 'Инциденты', admin: 'Управление',
 };
 
 const ROLE_LABEL = {
   admin: 'Администратор', operator: 'Оператор',
-  school: 'Ответственный школы', provider: 'Поставщик связи',
+  school: 'Ответственный школы', provider: 'Поставщик связи', district: 'Районный отдел',
 };
 
 export default function App() {
@@ -64,7 +69,9 @@ function Dashboard({ user, onLogout }) {
   const [mapMode, setMapMode] = useState('points');
   const [slaLayer, setSlaLayer] = useState(false);
   const [mapCollapsed, setMapCollapsed] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
 
+  const [demo, setDemo] = useState(false);   // режим демонстрации истории
   const [selectedId, setSelectedId] = useState(null);
   const [schoolDrawer, setSchoolDrawer] = useState(null);
   const [deviceDrawer, setDeviceDrawer] = useState(null);
@@ -79,11 +86,11 @@ function Dashboard({ user, onLogout }) {
     setOverview(ov); setIncidents(inc); setTrend(tr);
   }, []);
 
-  useEffect(() => { loadCore(); }, [loadCore]);
+  useEffect(() => { loadCore(); }, [loadCore, demo]);
 
   useEffect(() => {
     api.schools({ region, provider, status, search }).then(setSchools).catch(() => setSchools([]));
-  }, [region, provider, status, search]);
+  }, [region, provider, status, search, demo]);
 
   // ⌘K / Ctrl+K — фокус в поиск
   useEffect(() => {
@@ -99,8 +106,17 @@ function Dashboard({ user, onLogout }) {
   }, []);
 
   const counts = overview?.status_counts || {};
-  const total = overview?.total_schools || 1;
-  const healthy = Math.round(100 * (counts.normal || 0) / total);
+  const fresh = overview?.freshness;
+  // Без свежих замеров средние и «доля нормы» не показываем: 0 выглядел бы как показатель.
+  const withData = (overview?.total_schools || 0) - (counts.no_data || 0);
+  const healthy = withData > 0 ? Math.round(100 * (counts.normal || 0) / withData) : null;
+  const val = (v) => (withData > 0 ? v : '—');
+
+  const toggleDemo = () => {
+    if (demo) { setAsOf(null); setDemo(false); return; }
+    const anchor = overview?.freshness?.last_measurement;   // конец истории в базе
+    if (anchor) { setAsOf(anchor); setDemo(true); }
+  };
   const selected = schools.find((s) => s.id === selectedId);
 
   const sparks = useMemo(() => ({
@@ -111,7 +127,7 @@ function Dashboard({ user, onLogout }) {
   const openSchool = (id) => { setSelectedId(id); setSchoolDrawer(id); };
 
   return (
-    <div className="shell">
+    <div className={`shell ${navCollapsed ? 'nav-min' : ''}`}>
       {/* ---------- Боковая навигация ---------- */}
       <aside className="sidebar">
         <div className="brand">
@@ -124,10 +140,18 @@ function Dashboard({ user, onLogout }) {
           </div>
         </div>
 
+        <button className="nav-collapse" onClick={() => setNavCollapsed((v) => !v)}
+          aria-expanded={!navCollapsed}
+          title={navCollapsed ? 'Развернуть меню' : 'Свернуть меню'}>
+          <IcoChevron style={{ transform: `rotate(${navCollapsed ? -90 : 90}deg)` }} />
+          <span>Свернуть меню</span>
+        </button>
+
         <nav className="nav">
-          {NAV.map(({ key, label, Icon }) => (
+          {NAV.filter(({ key }) => key !== 'admin' || ['admin', 'operator'].includes(user?.role))
+            .map(({ key, label, Icon }) => (
             <button key={key} className={`nav-item ${view === key ? 'active' : ''}`}
-              onClick={() => setView(key)}>
+              title={label} onClick={() => setView(key)}>
               <Icon size={17} /><span>{label}</span>
               {key === 'incidents' && incidents.length
                 ? <span className="nav-badge">{incidents.length}</span> : null}
@@ -155,14 +179,26 @@ function Dashboard({ user, onLogout }) {
       </aside>
 
       {/* ---------- Основная область ---------- */}
-      <div className="main">
+      <div className="main" key={demo ? 'history' : 'live'}>
         <header className="topbar">
           <h1>{TITLES[view]}</h1>
           <span className="vdiv" />
-          <span className="sys-state">
-            <i className="dot pulse" />
-            <span className="eyebrow">Система активна</span>
+          <span className={`sys-state ${fresh?.is_stale ? 'stale' : ''}`}
+            title={fresh?.last_measurement ? `Последний замер: ${fmtStamp(fresh.last_measurement)}` : ''}>
+            <i className={`dot ${fresh && !fresh.is_stale ? 'pulse' : ''}`}
+              style={fresh?.is_stale ? { background: 'var(--warn)' } : undefined} />
+            <span className="eyebrow">
+              {!fresh ? 'Загрузка…'
+                : demo ? `Демо истории · ${fmtStamp(fresh.as_of)}`
+                  : fresh.is_stale ? `Нет свежих данных · замер ${fmtStamp(fresh.last_measurement)}`
+                    : `Замер ${fmtAge(fresh.age_min)} назад`}
+            </span>
           </span>
+          <button className={`pill-toggle ${demo ? 'on' : ''}`} onClick={toggleDemo}
+            disabled={!demo && !fresh?.last_measurement}
+            title="Показать состояние на момент последнего замера в базе. Это не текущие данные.">
+            <IcoClock size={15} />Демо истории
+          </button>
 
           <div className="search">
             <IcoSearch size={15} style={{ color: 'var(--ink-3)' }} />
@@ -175,6 +211,27 @@ function Dashboard({ user, onLogout }) {
             {incidents.length ? <i className="pip" /> : null}
           </button>
         </header>
+
+        {demo ? (
+          <div className="banner demo">
+            <span>
+              <b>Режим демонстрации истории.</b> Показано состояние на {fmtStamp(fresh?.as_of)};
+              это не текущие данные.
+            </span>
+            <button className="btn" onClick={toggleDemo}>Выйти из демо</button>
+          </div>
+        ) : fresh?.is_stale ? (
+          <div className="banner stale">
+            <span>
+              <b>Нет свежих данных.</b> Последний замер: {fmtStamp(fresh.last_measurement)}
+              {' '}({fmtAge(fresh.age_min)} назад). Статусы школ не подтверждены; пустые списки и
+              графики не означают, что связь в норме.
+            </span>
+            <button className="btn" onClick={toggleDemo} disabled={!fresh.last_measurement}>
+              Показать историю (демо)
+            </button>
+          </div>
+        ) : null}
 
         {view === 'map' ? (
           <>
@@ -231,19 +288,20 @@ function Dashboard({ user, onLogout }) {
                   <IcoDown size={15} style={{ color: 'var(--accent)' }} />
                   <div>
                     <div className="chip-label">Средняя ↓</div>
-                    <div className="chip-value">{overview?.avg_download ?? '—'} <small>Мбит/с</small></div>
+                    <div className="chip-value">{val(overview?.avg_download) ?? '—'} <small>Мбит/с</small></div>
                   </div>
                 </div>
                 <div className="chip">
                   <IcoClock size={15} style={{ color: 'var(--warn)' }} />
                   <div>
                     <div className="chip-label">Задержка</div>
-                    <div className="chip-value">{overview?.avg_ping ?? '—'} <small>мс</small></div>
+                    <div className="chip-value">{val(overview?.avg_ping) ?? '—'} <small>мс</small></div>
                   </div>
                 </div>
                 <div className="mini-stats">
                   {[['Норма', counts.normal, '#17A65B'], ['Нестаб.', counts.unstable, '#E4962A'],
-                    ['Авария', (counts.critical || 0) + (counts.offline || 0), '#E0453E']].map(
+                    ['Авария', (counts.critical || 0) + (counts.offline || 0), '#E0453E'],
+                    ['Нет данных', counts.no_data, '#8492A6']].map(
                     ([label, value, color]) => (
                       <div className="mini-stat" key={label}>
                         <div className="k">{label}</div>
@@ -257,59 +315,51 @@ function Dashboard({ user, onLogout }) {
             <div className="kpi-strip">
               <Kpi label="Организаций" value={overview?.total_schools ?? '—'}
                 sub="в системе мониторинга"
-                badge={{ text: `${healthy}% норма`, kind: healthy >= 70 ? 'up' : 'down' }} />
+                badge={healthy === null ? { text: 'нет данных', kind: 'flat' }
+                  : { text: `${healthy}% норма`, kind: healthy >= 70 ? 'up' : 'down' }} />
               <Kpi label="ПК-агентов" value={overview?.total_devices ?? '—'}
                 sub={`в сети ${overview?.devices_online ?? 0}`}
                 badge={{ text: 'ПК-уровень', kind: 'flat' }} />
-              <Kpi label="Средняя скорость" value={overview?.avg_download ?? '—'} unit="Мбит/с"
-                sub="загрузка по области" spark={sparks.download} sparkColor="#2F6BF6"
-                badge={{ text: `↑ ${overview?.avg_upload ?? 0}`, kind: 'up' }} />
-              <Kpi label="Задержка" value={overview?.avg_ping ?? '—'} unit="мс"
-                sub={`потери ${overview?.avg_loss ?? 0}%`} spark={sparks.ping} sparkColor="#D9730D"
-                badge={{ text: (overview?.avg_ping ?? 0) < 80 ? 'в норме' : 'выше порога',
-                         kind: (overview?.avg_ping ?? 0) < 80 ? 'up' : 'down' }} />
+              <Kpi label="Средняя скорость" value={val(overview?.avg_download) ?? '—'} unit="Мбит/с"
+                sub="основные линии, свежие замеры" spark={sparks.download} sparkColor="#2F6BF6"
+                badge={withData > 0 ? { text: `↑ ${overview?.avg_upload ?? 0}`, kind: 'up' }
+                  : { text: 'нет данных', kind: 'flat' }} />
+              <Kpi label="Задержка" value={val(overview?.avg_ping) ?? '—'} unit="мс"
+                sub={withData > 0 ? `потери ${overview?.avg_loss ?? 0}%` : 'нет свежих замеров'}
+                spark={sparks.ping} sparkColor="#D9730D"
+                badge={withData <= 0 ? { text: 'нет данных', kind: 'flat' }
+                  : { text: (overview?.avg_ping ?? 0) <= 100 ? 'в норме' : 'выше порога',
+                      kind: (overview?.avg_ping ?? 0) <= 100 ? 'up' : 'down' }} />
               <Kpi label="Инцидентов" value={overview?.active_incidents ?? '—'}
                 sub="требуют устранения"
                 badge={{ text: 'SLA', kind: (overview?.active_incidents ?? 0) ? 'down' : 'up' }} />
             </div>
 
-            <div className="work">
-              <div className="stage">
-                {mapCollapsed ? (
-                  // Карта по-настоящему свёрнута: Mapbox размонтирован (не рендерится
-                  // и не тратит ресурсы), вместо него — компактная плашка разворота.
-                  <div className="stage-collapsed">
-                    <IcoMap size={26} style={{ color: 'var(--ink-3)' }} />
-                    <p>Карта свёрнута</p>
-                    <button className="btn accent" onClick={() => setMapCollapsed(false)}>
-                      Показать карту
+            <div className={`work ${mapCollapsed ? 'no-map' : ''}`}>
+              {mapCollapsed ? null : (
+                <div className="stage">
+                  <MapView schools={schools} mode={mapMode} selectedId={selectedId}
+                    onSelect={setSelectedId} onOpenSchool={openSchool} />
+
+                  <div className="float bl legend-card">
+                    <div className="eyebrow">Статус канала</div>
+                    {Object.entries(STATUS).map(([label, meta]) => (
+                      <div className="legend-row" key={label}>
+                        <span className="legend-dot" style={{ background: meta.color }} />
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="float bc">
+                    <button className="fab" disabled={!selected}
+                      onClick={() => selected && openSchool(selected.id)}>
+                      <IcoSchool size={16} />
+                      {selected ? `Карточка: ${selected.name.slice(0, 34)}` : 'Выберите школу на карте'}
                     </button>
                   </div>
-                ) : (
-                  <>
-                    <MapView schools={schools} mode={mapMode} selectedId={selectedId}
-                      onSelect={setSelectedId} onOpenSchool={openSchool} />
-
-                    <div className="float bl legend-card">
-                      <div className="eyebrow">Статус канала</div>
-                      {Object.entries(STATUS).map(([label, meta]) => (
-                        <div className="legend-row" key={label}>
-                          <span className="legend-dot" style={{ background: meta.color }} />
-                          {label}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="float bc">
-                      <button className="fab" disabled={!selected}
-                        onClick={() => selected && openSchool(selected.id)}>
-                        <IcoSchool size={16} />
-                        {selected ? `Карточка: ${selected.name.slice(0, 34)}` : 'Выберите школу на карте'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+                </div>
+              )}
 
               <Rail overview={overview} incidents={incidents} schools={schools}
                 onOpenSchool={openSchool} onOpenDevice={setDeviceDrawer} onReload={loadCore} />
@@ -318,6 +368,8 @@ function Dashboard({ user, onLogout }) {
         ) : null}
 
         {view === 'schools' ? <SchoolsPage schools={schools} onOpenSchool={openSchool} /> : null}
+        {view === 'rating' ? <RatingPage onOpenSchool={openSchool} /> : null}
+        {view === 'public-data' ? <PublicDataPage /> : null}
         {view === 'devices' ? <DevicesPage onOpenDevice={setDeviceDrawer} /> : null}
         {view === 'diagnostics' ? (
           <DiagnosticsPage role={user?.role} onOpenSchool={openSchool} />
@@ -330,13 +382,13 @@ function Dashboard({ user, onLogout }) {
       </div>
 
       {schoolDrawer ? (
-        <SchoolDrawer schoolId={schoolDrawer} role={user?.role}
+        <SchoolDrawer key={demo ? 'history' : 'live'} schoolId={schoolDrawer} role={user?.role}
           onOpenDevice={(id) => { setSchoolDrawer(null); setDeviceDrawer(id); }}
           onClose={() => setSchoolDrawer(null)} />
       ) : null}
 
       {deviceDrawer ? (
-        <DeviceDrawer deviceId={deviceDrawer} role={user?.role}
+        <DeviceDrawer key={demo ? 'history' : 'live'} deviceId={deviceDrawer} role={user?.role}
           onClose={() => setDeviceDrawer(null)} />
       ) : null}
     </div>

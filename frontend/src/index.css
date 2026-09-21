@@ -116,6 +116,30 @@ a { color: inherit; text-decoration: none; }
 }
 .nav-item.active .nav-badge { background: rgba(255,255,255,.22); color: #fff; }
 
+/* Кнопка и режим свёрнутой левой области */
+.nav-collapse {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 14px; margin: 0 0 10px; border-radius: 11px; text-align: left;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.nav-collapse:hover { background: var(--surface-2); color: var(--ink-2); }
+.nav-collapse svg { flex: 0 0 auto; }
+
+.shell.nav-min { --sidebar-w: 78px; }
+.shell.nav-min .brand-text,
+.shell.nav-min .nav-collapse span,
+.shell.nav-min .user-meta,
+.shell.nav-min .nav-item span:not(.nav-badge),
+.shell.nav-min .partner-logos { display: none; }
+.shell.nav-min .brand { justify-content: center; padding: 4px 0 22px; }
+.shell.nav-min .nav-collapse,
+.shell.nav-min .nav-item,
+.shell.nav-min .user-chip { justify-content: center; }
+.shell.nav-min .nav-item { position: relative; }
+.shell.nav-min .nav-item .nav-badge { position: absolute; margin: 0; transform: translate(17px, -13px); }
+.shell.nav-min .logout-btn { margin: 0; }
+
 .sidebar-foot { border-top: 1px solid var(--line); padding-top: 14px; }
 .user-chip { display: flex; align-items: center; gap: 11px; padding: 4px 6px; }
 .avatar {
@@ -233,7 +257,10 @@ a { color: inherit; text-decoration: none; }
 .stage { flex: 1; position: relative; min-width: 0; background: var(--surface-3); }
 .map-root { position: absolute; inset: 0; width: 100%; height: 100%; }
 
-/* Свёрнутая карта: Mapbox размонтирован, вместо него — компактная плашка разворота */
+/* Свёрнутая карта: Mapbox размонтирован, от полотна остаётся корешок,
+   а правая колонка занимает всю рабочую область. */
+.work.no-map .rail { flex: 1 1 auto; width: auto; }
+
 .stage-collapsed {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 12px;
@@ -495,6 +522,29 @@ table.grid code { font-family: var(--mono); font-size: 11.5px; background: var(-
 @media (max-width: 1240px) {
   .rail { display: none; }
   :root { --sidebar-w: 78px; }
-  .brand-text, .nav-item span, .user-meta { display: none; }
-  .nav-item { justify-content: center; }
+  .brand-text, .nav-item span, .user-meta, .nav-collapse span { display: none; }
+  .nav-item, .nav-collapse { justify-content: center; }
+  .work.no-map .rail { display: flex; }
 }
+
+/* --- Свежесть данных и режим демонстрации истории --- */
+:root { --stale: #8492A6; --stale-soft: #F1F3F7; }
+.tag.stale { background: var(--stale-soft); color: var(--stale); border: 1px dashed #B8C0CC; }
+.banner { display: flex; align-items: center; gap: 14px; padding: 10px 24px; font-size: 12.5px;
+  font-weight: 600; line-height: 1.45; border-bottom: 1px solid var(--line); }
+.banner > span { flex: 1; min-width: 0; }
+.banner b { font-weight: 800; }
+.banner .btn { flex: none; padding: 6px 13px; }
+.banner.stale { background: var(--warn-soft); color: #8A5A0A; }
+.banner.demo { background: var(--accent-soft); color: var(--accent); }
+.sys-state.stale .eyebrow { color: var(--warn); }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; padding: 14px; }
+.form-grid label { display: grid; gap: 5px; font-size: 10.5px; font-weight: 800; color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: .06em; }
+.form-grid input, .form-grid select { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink);
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface);
+  text-transform: none; letter-spacing: 0; }
+.form-grid .check { display: flex; align-items: center; gap: 7px; text-transform: none; letter-spacing: 0;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.form-grid .wide { grid-column: 1 / -1; }
+.check-row { display: flex; flex-wrap: wrap; gap: 6px 16px; }

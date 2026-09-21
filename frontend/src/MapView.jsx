@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { statusMeta } from './ui';
+import { fmtStamp, statusMeta } from './ui';
 
 mapboxgl.accessToken =
   'pk.eyJ1IjoiYmVicnVzZDMyIiwiYSI6ImNtbXozZTEzZTA0M3oycG93M3R5NHBranQifQ.pc5OgxomRXUl5pRDVktXuA';
@@ -25,8 +25,10 @@ const toGeoJSON = (schools) => ({
         id: s.id, name: s.name, code: s.school_id_code, status: s.status,
         color: statusMeta(s.status).color,
         provider: s.provider, connection: s.connection_type,
-        download: s.current_download ?? 0, ping: s.current_ping ?? 0,
-        contract: s.contract_speed_down ?? 0,
+        // Устаревший замер не выдаётся за текущий показатель.
+        download: s.is_stale ? '—' : (s.current_download ?? 0),
+        ping: s.is_stale ? '—' : (s.current_ping ?? 0),
+        contract: s.contract_speed_down ?? 0, last: fmtStamp(s.last_measurement),
       },
     })),
 });
@@ -47,11 +49,11 @@ export default function MapView({ schools, mode, onOpenSchool, onSelect, selecte
   /** Кадрирование по фактическому расположению школ (с учётом плавающих карточек). */
   const fitToData = useCallback((instance, data) => {
     if (fittedRef.current || !data.features.length) return;
-    const bounds = new mapboxgl.LngLatBounds();
-    data.features.forEach((feature) => bounds.extend(feature.geometry.coordinates));
-    instance.fitBounds(bounds, {
-      padding: { top: 60, bottom: 110, left: 390, right: 70 },
-      maxZoom: 8.5, duration: 0,
+    // Жёстко ограничиваем bbox ВКО — не улетаем в Россию
+    const VKO_BOUNDS = [[78.0, 47.0], [87.5, 51.5]];
+    instance.fitBounds(VKO_BOUNDS, {
+      padding: { top: 50, bottom: 80, left: 60, right: 60 },
+      maxZoom: 8, duration: 600,
     });
     fittedRef.current = true;
   }, []);
@@ -110,8 +112,9 @@ export default function MapView({ schools, mode, onOpenSchool, onSelect, selecte
         <div class="map-pop-grid">
           <div><span>Загрузка</span><b style="color:${meta.color}">${props.download}</b></div>
           <div><span>Договор</span><b>${props.contract}</b></div>
-          <div><span>Задержка</span><b>${props.ping} мс</b></div>
+          <div><span>Задержка</span><b>${props.ping === '—' ? '—' : `${props.ping} мс`}</b></div>
           <div><span>Линия</span><b style="font-size:11px">${props.connection}</b></div>
+          <div style="grid-column:1/-1"><span>Последний замер</span><b style="font-size:11px">${props.last}</b></div>
         </div>
         <button class="btn accent" style="margin-top:13px;width:100%">Карточка школы</button>`;
       node.querySelector('button').addEventListener('click', () => {
@@ -130,8 +133,10 @@ export default function MapView({ schools, mode, onOpenSchool, onSelect, selecte
     const instance = new mapboxgl.Map({
       container: holder.current,
       style: STYLES[mode] || STYLES.points,
-      center: [82.9, 49.4],
-      zoom: 6.1,
+      center: [82.6, 49.95],   // Усть-Каменогорск — центр ВКО
+      zoom: 7.5,
+      minZoom: 5,
+      maxBounds: [[73.0, 44.0], [92.0, 55.0]], // не улетать за пределы региона
       attributionControl: false,
     });
     baseRef.current = mode === 'satellite' ? 'satellite' : 'light';

@@ -13,44 +13,72 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from statistics import mean, pstdev
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..models import Measurement, School
-from .status import is_sla_violation
+from .lines import main_monitors
+from .status import (BAD_STATUSES, effective_status, is_sla_violation, speed_floor,
+                     thresholds)
 
 WEEKDAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
 
 
-def _rows(db: Session, school_id: int, device_id: str | None, days: int) -> list[Measurement]:
-    since = datetime.utcnow() - timedelta(days=days)
-    query = db.query(Measurement).filter(Measurement.school_id == school_id)
+def _rows(db: Session, school_id: int, device_id: str | None, days: int,
+          now: datetime) -> list[Measurement]:
+    """Замеры окна [now − days, now]. Без отката на «что есть»: устаревшая история
+    не выдаётся за текущую. Линию школы характеризуют только точки мониторинга
+    основной линии — рабочие места и Wi-Fi к качеству канала провайдера не относятся."""
+    query = db.query(Measurement).filter(
+        Measurement.school_id == school_id,
+        Measurement.timestamp >= now - timedelta(days=days), Measurement.timestamp <= now)
     if device_id:
         query = query.filter(Measurement.device_id == device_id)
-    rows = query.filter(Measurement.timestamp >= since).order_by(Measurement.timestamp.asc()).all()
-    if not rows:  # демо-БД может быть короче окна — берём что есть
-        query = db.query(Measurement).filter(Measurement.school_id == school_id)
-        if device_id:
-            query = query.filter(Measurement.device_id == device_id)
-        rows = query.order_by(Measurement.timestamp.asc()).limit(2000).all()
-    return rows
+    else:
+        query = query.filter(Measurement.device_id.in_(main_monitors()))
+    return query.order_by(Measurement.timestamp.asc()).all()
 
 
-def analyze(db: Session, school_id: int, device_id: str | None = None, days: int = 30) -> dict:
+def _no_data(db: Session, school: School | None, school_id: int, device_id: str | None,
+             days: int, contract: float) -> dict:
+    """Пусто: замеров в окне нет. Явное состояние, а не «100% соответствия»."""
+    query = db.query(func.max(Measurement.timestamp)).filter(Measurement.school_id == school_id)
+    if device_id:
+        query = query.filter(Measurement.device_id == device_id)
+    last = query.scalar()
+    return {"school_id": school_id, "school_name": school.name if school else None,
+            "provider": school.provider if school else None, "device_id": device_id,
+            "window_days": days, "samples": 0, "data_state": "no_data",
+            "last_measurement": last.isoformat() if last else None,
+            "contract_speed": contract, "avg_speed": None, "recent_avg_speed": None,
+            "stability": None, "sla_compliance_pct": None, "availability_pct": None,
+            "violations": 0, "trend_pct": None, "patterns": [], "risk_score": 0,
+            "risk_level": "нет данных", "forecast": None,
+            "worst_weekday": None, "worst_hour": None}
+
+
+def analyze(db: Session, school_id: int, device_id: str | None = None, days: int = 30,
+            now: datetime | None = None) -> dict:
+    now = now or datetime.utcnow()
+    th = thresholds()
     school = db.get(School, school_id)
-    rows = _rows(db, school_id, device_id, days)
+    rows = _rows(db, school_id, device_id, days, now)
     contract = (school.contract_speed_down if school else 100.0) or 100.0
+    contract_up = school.contract_speed_up if school else None
 
     if not rows:
-        return {"school_id": school_id, "device_id": device_id, "samples": 0,
-                "sla_compliance_pct": 100.0, "violations": 0, "patterns": [],
-                "risk_score": 0, "risk_level": "нет данных", "forecast": None,
-                "worst_weekday": None, "worst_hour": None, "contract_speed": contract}
+        return _no_data(db, school, school_id, device_id, days, contract)
 
     violations = [r for r in rows
-                  if is_sla_violation(r.download_speed or 0, r.ping or 0,
-                                      r.packet_loss or 0, contract, bool(r.is_offline))]
+                  if is_sla_violation(r.download_speed or 0, r.ping or 0, r.packet_loss or 0,
+                                      contract, bool(r.is_offline), upload=r.upload_speed or 0,
+                                      jitter=r.jitter or 0, contract_up=contract_up)]
     compliance = round(100.0 * (1 - len(violations) / len(rows)), 1)
+    # ТЗ п.11, п.14: доступность и устойчивое несоответствие договору — отдельно от общего SLA.
+    offline = sum(1 for r in rows if r.is_offline)
+    availability = round(100.0 * (1 - offline / len(rows)), 1)
+    below_contract = sum(1 for r in rows if not r.is_offline
+                         and (r.download_speed or 0) < th.contract_ratio * contract)
 
     by_weekday: dict[int, list[float]] = defaultdict(list)
     by_hour: dict[int, list[float]] = defaultdict(list)
@@ -113,8 +141,17 @@ def analyze(db: Session, school_id: int, device_id: str | None = None, days: int
         "avg_speed": round(overall, 1),
         "recent_avg_speed": round(recent_avg, 1),
         "stability": round(max(0.0, 100 - spread / contract * 100), 1),
+        "data_state": "ok",
+        "last_measurement": rows[-1].timestamp.isoformat(),
         "sla_compliance_pct": compliance,
-        "sla_threshold_pct": int(settings.SLA_SPEED_RATIO * 100),
+        "sla_threshold_pct": int(th.contract_ratio * 100),
+        "speed_floor": round(speed_floor(th.down_min, contract, th.contract_ratio), 1),
+        "availability_pct": availability,
+        "availability_ok": availability >= th.availability_min,
+        "availability_norm_pct": th.availability_min,
+        "below_contract": below_contract,
+        "below_contract_pct": round(100.0 * below_contract / len(rows), 1),
+        "threshold_id": th.id,
         "violations": len(violations),
         "trend_pct": trend,
         "patterns": patterns[:5],
@@ -139,11 +176,19 @@ def _forecast(compliance: float, trend: float, patterns: list) -> str:
     return "Прогноз: возможны кратковременные отклонения, требуется наблюдение."
 
 
-def region_overview(db: Session, limit: int = 8) -> list[dict]:
-    """Топ школ с наибольшим риском нарушения SLA — очередь работы оператора."""
-    result = []
-    for school in db.query(School).all():
-        if school.status in ("Критично", "Нет соединения", "Нестабильно"):
-            result.append(analyze(db, school.id, days=30))
+def region_overview(db: Session, limit: int = 8, school_ids: list[int] | None = None,
+                    now: datetime | None = None) -> list[dict]:
+    """Топ школ с наибольшим риском нарушения SLA — очередь работы оператора.
+
+    Берутся школы, у которых СВЕЖИЙ статус плохой: школа без свежих данных в очередь
+    риска не попадает (о ней нечего сказать), она видна на карте как «нет свежих данных».
+    """
+    now = now or datetime.utcnow()
+    query = db.query(School)
+    if school_ids is not None:
+        query = query.filter(School.id.in_(school_ids or [-1]))
+    result = [analyze(db, school.id, days=30, now=now) for school in query.all()
+              if effective_status(school.status, school.last_measurement, now) in BAD_STATUSES]
+    result = [r for r in result if r["samples"]]
     result.sort(key=lambda r: r["risk_score"], reverse=True)
     return result[:limit]

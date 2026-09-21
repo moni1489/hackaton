@@ -29,14 +29,17 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     write_audit(db, user.email, user.role, "login.success", "",
                 request.client.host if request.client else "")
     return TokenResponse(access_token=token, role=user.role, full_name=user.full_name,
-                         school_id=user.school_id, provider_name=user.provider_name)
+                         school_id=user.school_id, provider_name=user.provider_name,
+                         district=user.district)
 
 
 @router.get("/me", summary="Текущий профиль и область видимости")
 def me(user: User = Depends(current_user)):
     return {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role,
             "school_id": user.school_id, "provider_name": user.provider_name,
+            "district": user.district,
             "scope": {"admin": "вся область", "operator": "вся область",
+                      "district": "свой район/город",
                       "school": "своя организация",
                       "provider": "линии своего провайдера"}.get(user.role, "ограничено")}
 
@@ -56,10 +59,12 @@ def audit(limit: int = 100, db: Session = Depends(get_db),
 def policy():
     return {
         "transport": "HTTPS/TLS 1.3 обязателен; допускается выделенный VPN-туннель",
-        "device_auth": "JWT, привязанный к SHA-256 отпечатку оборудования"
-                       + (" + mTLS клиентский сертификат" if settings.REQUIRE_MTLS else ""),
+        "device_auth": "JWT устройства + сверка отпечатка оборудования с записью в БД"
+                       + (" + mTLS клиентский сертификат" if settings.REQUIRE_MTLS
+                          else "; привязка к железу не доказывается — для неё включите mTLS "
+                               "(REQUIRE_MTLS)"),
         "mtls_required": settings.REQUIRE_MTLS,
-        "rbac_roles": ["admin", "operator", "school", "provider"],
+        "rbac_roles": ["admin", "operator", "district", "school", "provider"],
         "rate_limits": {"agent_per_min": settings.RATE_LIMIT_AGENT,
                         "web_per_min": settings.RATE_LIMIT_WEB},
         "audit": "append-only журнал со сцепленными SHA-256 хэшами",

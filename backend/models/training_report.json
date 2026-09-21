@@ -1,13 +1,13 @@
 {
- "version": "20260917-1036",
+ "version": "20260921-1152",
  "attribution": {
-  "samples": 1808,
-  "accuracy": 0.976,
-  "macro_f1": 0.978
+  "samples": 1810,
+  "accuracy": 0.981,
+  "macro_f1": 0.981
  },
  "forecast": {
-  "samples": 770,
-  "accuracy": 0.878,
-  "macro_f1": 0.876
+  "samples": 739,
+  "accuracy": 0.87,
+  "macro_f1": 0.856
  }
 }

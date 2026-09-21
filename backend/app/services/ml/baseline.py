@@ -163,7 +163,8 @@ def snapshot(db: Session, at: datetime, window_min: int = 60,
     return result
 
 
-def device_timeline(db: Session, device_id: str, hours: int = 24) -> list[dict]:
+def device_timeline(db: Session, device_id: str, hours: int = 24,
+                    now: datetime | None = None) -> list[dict]:
     """Ряд «факт против нормы» для графика в карточке ПК."""
     store = profiles(db)
     device = db.query(Device).filter(Device.device_id == device_id).first()
@@ -171,9 +172,10 @@ def device_timeline(db: Session, device_id: str, hours: int = 24) -> list[dict]:
         return []
     school = db.get(School, device.school_id)
     contract = (school.contract_speed_down if school else 100.0) or 100.0
-    since = datetime.utcnow() - timedelta(hours=hours)
+    now = now or datetime.utcnow()
     rows = (db.query(Measurement).filter(Measurement.device_id == device_id,
-                                         Measurement.timestamp >= since)
+                                         Measurement.timestamp >= now - timedelta(hours=hours),
+                                         Measurement.timestamp <= now)
             .order_by(Measurement.timestamp.asc()).all())
     out = []
     for row in rows:

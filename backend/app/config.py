@@ -41,14 +41,36 @@ class Settings(BaseSettings):
     INTERVAL_UNSTABLE_SEC: int = 180    # «Нестабильно» — углублённая диагностика
     INTERVAL_CRITICAL_SEC: int = 60     # «Критично» — максимальная частота
 
-    # --- Пороги SLA --------------------------------------------------------
-    SLA_SPEED_RATIO: float = 0.6        # факт < 60% договора => нарушение
-    SLA_PING_MS: float = 80.0
-    SLA_LOSS_PCT: float = 2.0
+    # --- Пороги (ТЗ п.11) --------------------------------------------------
+    # Это стартовые значения: рабочие пороги хранятся в таблице thresholds
+    # (версиями) и меняются администратором через API без правки кода.
+    SLA_DOWN_MBPS: float = 20.0         # Download не менее
+    SLA_UP_MBPS: float = 20.0           # Upload не менее
+    SLA_PING_MS: float = 100.0          # Ping не более
+    SLA_JITTER_MS: float = 30.0         # Jitter не более
+    SLA_LOSS_PCT: float = 2.0           # Packet Loss не более
+    SLA_AVAILABILITY_PCT: float = 99.0  # доступность за расчётный период не менее
+    SLA_SPEED_RATIO: float = 0.6        # сравнение с договором: факт < 60% договорной => нарушение
+    INCIDENT_AFTER_BAD: int = 3         # инцидент — после стольких подряд плохих замеров
+    STALE_AFTER_MIN: int = 90           # старше — школа «нет свежих данных», а не «норма»
+
+    # --- Хранение замеров ---------------------------------------------------
+    # Не меньше квартала (92 дня): рейтинг и динамика строятся по сырым замерам.
+    # Значения ниже 92 игнорируются (см. services/retention.py).
+    RETENTION_DAYS: int = 120
 
     # --- AI ----------------------------------------------------------------
     GENAI_TOKEN: str = ""
     GENAI_MODEL: str = "gemini-1.5-pro"
+
+    # Независимые источники: публичные измерения, без создания платных тестов.
+    EXTERNAL_POLL_ENABLED: bool = True
+    EXTERNAL_REFRESH_SEC: int = 900
+    IODA_REGION_CODE: str = "2083"
+    RIPE_PROBE_IDS: str = "6753,1016376"
+    RIPE_MEASUREMENT_IDS: str = "1001,1004"
+    MLAB_PROJECT: str = ""
+    MLAB_MAX_BYTES_BILLED: int = 10_000_000_000
 
 
 @lru_cache

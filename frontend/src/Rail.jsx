@@ -147,11 +147,13 @@ export default function Rail({ overview, incidents, schools, onOpenSchool, onOpe
 function Insights({ overview, counts, risks, schools, onOpenSchool }) {
   if (!overview) return <div className="empty">Загрузка сводки…</div>;
 
-  const total = overview.total_schools || 1;
-  const healthy = Math.round(100 * (counts.normal || 0) / total);
+  // Доля нормы — среди школ со свежими данными; без них процента нет, а не «0% — напряжённое».
+  const withData = (overview.total_schools || 0) - (counts.no_data || 0);
+  const noData = withData <= 0;
+  const healthy = noData ? 0 : Math.round(100 * (counts.normal || 0) / withData);
   const worst = risks[0];
   const slowest = [...schools]
-    .filter((s) => s.contract_speed_down)
+    .filter((s) => s.contract_speed_down && !s.is_stale)
     .sort((a, b) => (a.current_download / a.contract_speed_down) - (b.current_download / b.contract_speed_down))[0];
 
   return (
@@ -159,17 +161,23 @@ function Insights({ overview, counts, risks, schools, onOpenSchool }) {
       <div className="insight">
         <div className="insight-icon"><IcoShield size={17} style={{ color: 'var(--accent)' }} /></div>
         <div className="insight-body">
-          <Tag kind={healthy >= 70 ? 'ok' : healthy >= 45 ? 'warn' : 'danger'}>Состояние сети</Tag>
+          <Tag kind={noData ? 'stale' : healthy >= 70 ? 'ok' : healthy >= 45 ? 'warn' : 'danger'}>
+            Состояние сети
+          </Tag>
           <div className="insight-title">
-            {healthy >= 70 ? 'Стабильное' : healthy >= 45 ? 'Требует внимания' : 'Напряжённое'}
+            {noData ? 'Нет свежих данных'
+              : healthy >= 70 ? 'Стабильное' : healthy >= 45 ? 'Требует внимания' : 'Напряжённое'}
           </div>
-          <div className="insight-meter">
-            <Bar value={healthy} color={healthy >= 70 ? '#17A65B' : healthy >= 45 ? '#E4962A' : '#E0453E'} />
-            <span>{healthy}%</span>
-          </div>
+          {noData ? null : (
+            <div className="insight-meter">
+              <Bar value={healthy} color={healthy >= 70 ? '#17A65B' : healthy >= 45 ? '#E4962A' : '#E0453E'} />
+              <span>{healthy}%</span>
+            </div>
+          )}
           <p className="insight-note">
             {counts.normal} школ в норме, {counts.unstable} нестабильны,
-            {' '}{counts.critical} критичны, {counts.offline} без связи.
+            {' '}{counts.critical} критичны, {counts.offline} без связи,
+            {' '}{counts.no_data || 0} без свежих данных.
           </p>
         </div>
       </div>
@@ -179,12 +187,13 @@ function Insights({ overview, counts, risks, schools, onOpenSchool }) {
         <div className="insight-body">
           <Tag kind="info">Средние показатели</Tag>
           <div className="insight-title">
-            <span className="mono">{overview.avg_download}</span> Мбит/с по области
+            <span className="mono">{noData ? '—' : overview.avg_download}</span> Мбит/с по области
           </div>
           <p className="insight-note">
-            Отдача {overview.avg_upload} Мбит/с · задержка {overview.avg_ping} мс ·
-            потери {overview.avg_loss}% · ПК-агентов в сети {overview.devices_online}
-            {' '}из {overview.total_devices}.
+            {noData ? 'Свежих замеров основных линий нет. ' : (
+              `Отдача ${overview.avg_upload} Мбит/с · задержка ${overview.avg_ping} мс · `
+              + `потери ${overview.avg_loss}% · `)}
+            ПК-агентов в сети {overview.devices_online} из {overview.total_devices}.
           </p>
         </div>
       </div>
@@ -225,10 +234,11 @@ function Insights({ overview, counts, risks, schools, onOpenSchool }) {
         <div className="insight-icon"><IcoPulse size={17} style={{ color: 'var(--violet)' }} /></div>
         <div className="insight-body">
           <Tag kind="violet">Источник данных</Tag>
-          <div className="insight-title sm">Агрегация по ПК-агентам</div>
+          <div className="insight-title sm">Основная линия школы</div>
           <p className="insight-note">
-            Показатели школы усредняются по всем её компьютерам-агентам. Откройте карточку
-            школы и выберите конкретный ПК, чтобы увидеть индивидуальную историю канала.
+            Статус и показатели школы берутся с точки мониторинга её основной линии.
+            Рабочие места (ПК, ноутбуки) оцениваются отдельно и на статус школы не влияют.
+            Откройте карточку школы, чтобы увидеть линии и рабочие места.
           </p>
         </div>
       </div>

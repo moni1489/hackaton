@@ -17,6 +17,7 @@ class TokenResponse(BaseModel):
     full_name: str
     school_id: int | None = None
     provider_name: str | None = None
+    district: str | None = None
 
 
 # --- Agent -----------------------------------------------------------------
@@ -36,6 +37,8 @@ class EnrollRequest(BaseModel):
     device_type: str = "Рабочая станция"
     link_mode: str = "Ethernet 1 Гбит/с"
     cert_fingerprint: str | None = None
+    line_code: str | None = None     # какую линию измеряет точка мониторинга (ТЗ п.10)
+    line_role: str | None = None     # main | backup — при создании новой линии
 
 
 class EnrollResponse(BaseModel):
@@ -74,3 +77,25 @@ class LegacyMeasurement(MeasurementIn):
     """Совместимость с агентом v1 (без токена, только для демо-стенда)."""
     device_id: str = "AGENT-01"
     school_id: int = 1
+
+
+class ThresholdsIn(BaseModel):
+    """Пороги качества (ТЗ п.11). Новая версия добавляется, старые сохраняются."""
+    down_min: float = Field(gt=0)
+    up_min: float = Field(gt=0)
+    ping_max: float = Field(gt=0)
+    jitter_max: float = Field(gt=0)
+    loss_max: float = Field(ge=0, le=100)
+    availability_min: float = Field(gt=0, le=100)
+    contract_ratio: float = Field(gt=0, le=1)
+    incident_after: int = Field(ge=1, le=100)
+    stale_after_min: int = Field(ge=1)
+
+
+class LineIn(BaseModel):
+    code: str | None = None
+    role: str | None = None            # main | backup | disabled
+    provider: str | None = None
+    connection_type: str | None = None
+    contract_speed_down: float | None = Field(default=None, gt=0)
+    contract_speed_up: float | None = Field(default=None, gt=0)

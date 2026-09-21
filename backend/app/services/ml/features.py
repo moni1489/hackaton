@@ -14,25 +14,31 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from ...config import settings
-from ...models import Device, Measurement, School
+from ...models import Device, Line, Measurement, School
 from ..status import is_sla_violation
 
 CAUSES = ["none", "device", "school_lan", "provider_node", "regional"]
 
+# Метки — это ПРЕДПОЛАГАЕМЫЙ источник: сравнение соседей сужает круг, но причину не доказывает.
+# no_data и undetermined модель не выдаёт — это состояния слоя достаточности данных.
 CAUSE_LABELS = {
     "none": "Аномалия не подтверждена",
-    "device": "Отдельный ПК или его линк",
-    "school_lan": "Шлюз или ЛВС школы",
+    "device": "Отдельный ПК или его подключение",
+    "school_lan": "Уровень школы: ЛВС, роутер или линия провайдера",
     "provider_node": "Узел провайдера в районе",
     "regional": "Магистраль или энергоснабжение района",
+    "undetermined": "Источник не определён: данных недостаточно",
+    "no_data": "Нет свежих данных",
 }
 
 CAUSE_OWNER = {
     "none": "—",
     "device": "Школа · системный администратор",
-    "school_lan": "Школа · обслуживающая организация",
+    "school_lan": "Школа и провайдер · нужна проверка на месте",
     "provider_node": "Провайдер",
     "regional": "Провайдер / магистральный оператор",
+    "undetermined": "Требуется ручная проверка",
+    "no_data": "—",
 }
 
 ATTRIBUTION_FEATURES = [
@@ -74,7 +80,11 @@ class Topology:
     def __init__(self, db: Session):
         self.schools = {s.id: s for s in db.query(School).all()}
         self.devices: dict[int, list[Device]] = {}
+        # Резервная и отключённая линии в атрибуции основной линии не участвуют.
+        off_main = {line.id for line in db.query(Line).filter(Line.role != "main")}
         for device in db.query(Device).all():
+            if device.line_id in off_main:
+                continue
             self.devices.setdefault(device.school_id, []).append(device)
         self.by_district: dict[str, list[int]] = {}
         self.by_pair: dict[tuple, list[int]] = {}
@@ -85,13 +95,17 @@ class Topology:
             self.by_provider.setdefault(school.provider, []).append(school.id)
         self._anom_key: int | None = None
         self._anom: set[int] = set()
+        self._with_data: set[int] = set()
 
     def anomalous(self, snap: dict) -> set[int]:
         """Множество поражённых школ на снимке. Считается один раз на снимок —
-        иначе перебор соседей стал бы квадратичным по числу организаций."""
+        иначе перебор соседей стал бы квадратичным по числу организаций.
+        Заодно запоминает, у каких школ на снимке вообще есть замеры."""
         if self._anom_key != id(snap):
             self._anom_key = id(snap)
-            self._anom = {sid for sid in self.schools if self.school_anomalous(sid, snap)}
+            self._with_data = {sid for sid in self.schools
+                               if any(d.device_id in snap for d in self.devices.get(sid, []))}
+            self._anom = {sid for sid in self._with_data if self.school_anomalous(sid, snap)}
         return self._anom
 
     def school_anomalous(self, school_id: int, snap: dict) -> bool:
@@ -109,10 +123,13 @@ class Topology:
         return bad / len(present) >= 0.5 or bool(gateway and gateway["anomaly"])
 
     def _peer_fraction(self, ids: list[int], snap: dict, exclude: int) -> tuple[float, int]:
-        peers = [i for i in ids if i != exclude]
+        """Доля поражённых среди СОПОСТАВИМЫХ соседей и их число. Сосед без замеров на
+        снимке не сопоставим: он не «здоровый», о нём просто ничего не известно.
+        Нет сопоставимых — (0.0, 0); отличать это от «все здоровы» нужно по числу."""
+        hot = self.anomalous(snap)
+        peers = [i for i in ids if i != exclude and i in self._with_data]
         if not peers:
             return 0.0, 0
-        hot = self.anomalous(snap)
         return sum(1 for i in peers if i in hot) / len(peers), len(peers)
 
 
@@ -123,7 +140,9 @@ def attribution_features(school_id: int, snap: dict, topo: Topology) -> tuple[li
     states = [(d, snap[d.device_id]) for d in devices if d.device_id in snap]
 
     if not states:
-        return [0.0] * len(ATTRIBUTION_FEATURES), {"devices_total": len(devices),
+        # devices_total — ПК С ДАННЫМИ: ноль означает «замеров нет», а не «ПК нет».
+        return [0.0] * len(ATTRIBUTION_FEATURES), {"devices_total": 0,
+                                                   "devices_registered": len(devices),
                                                    "devices_affected": 0, "affected": []}
 
     affected = [(d, s) for d, s in states if s["anomaly"]]
@@ -145,7 +164,7 @@ def attribution_features(school_id: int, snap: dict, topo: Topology) -> tuple[li
     district_ids = topo.by_district.get(school.region, [])
     other_prov_ids = [i for i in district_ids
                       if topo.schools[i].provider != school.provider]
-    other_prov, _ = topo._peer_fraction(other_prov_ids, snap, school_id)
+    other_prov, other_n = topo._peer_fraction(other_prov_ids, snap, school_id)
     prov_other_dist_ids = [i for i in topo.by_provider.get(school.provider, [])
                            if topo.schools[i].region != school.region]
     prov_other_dist, _ = topo._peer_fraction(prov_other_dist_ids, snap, school_id)
@@ -167,11 +186,13 @@ def attribution_features(school_id: int, snap: dict, topo: Topology) -> tuple[li
     ]
     context = {
         "devices_total": len(states),
+        "devices_registered": len(devices),
         "devices_affected": len(affected),
         "gateway_affected": bool(gateway and gateway["anomaly"]),
         "avg_depth_pct": round(_mean(depths) * 100, 1),
         "peers_same_provider_district": ctx,
         "peers_same_provider_district_affected": round(same_pair * ctx),
+        "peers_other_providers_district": other_n,
         "peers_other_providers_district_affected_pct": round(other_prov * 100, 1),
         "peers_same_provider_other_districts_affected_pct": round(prov_other_dist * 100, 1),
         "affected": [{"device_id": d.device_id, "name": d.name, "room": d.room,
@@ -190,6 +211,7 @@ def forecast_features(school_id: int, at: datetime, rows: list[Measurement],
     if not school or not rows:
         return None
     contract = school.contract_speed_down or 100.0
+    contract_up = school.contract_speed_up
 
     def window(hours: float) -> list[Measurement]:
         edge = at - timedelta(hours=hours)
@@ -204,7 +226,8 @@ def forecast_features(school_id: int, at: datetime, rows: list[Measurement],
             return 1.0
         bad = sum(1 for r in items
                   if is_sla_violation(r.download_speed or 0, r.ping or 0, r.packet_loss or 0,
-                                      contract, bool(r.is_offline)))
+                                      contract, bool(r.is_offline), upload=r.upload_speed or 0,
+                                      jitter=r.jitter or 0, contract_up=contract_up))
         return 1.0 - bad / len(items)
 
     avg_6h = _mean([(r.download_speed or 0) / contract for r in last_6h])
@@ -236,7 +259,7 @@ BREACH_SHARE = 0.25   # устойчивое нарушение, а не еди�
 
 
 def breach_in_window(rows: list[Measurement], start: datetime, end: datetime,
-                     contract: float) -> bool:
+                     contract: float, contract_up: float | None = None) -> bool:
     """Метка прогноза: был ли УСТОЙЧИВЫЙ выход за SLA в интервале.
 
     Единичный просевший замер нарушением не считается — иначе меткой становился
@@ -247,5 +270,6 @@ def breach_in_window(rows: list[Measurement], start: datetime, end: datetime,
         return False
     bad = sum(1 for r in window
               if is_sla_violation(r.download_speed or 0, r.ping or 0, r.packet_loss or 0,
-                                  contract, bool(r.is_offline)))
+                                  contract, bool(r.is_offline), upload=r.upload_speed or 0,
+                                  jitter=r.jitter or 0, contract_up=contract_up))
     return bad / len(window) >= BREACH_SHARE

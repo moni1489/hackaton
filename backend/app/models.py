@@ -36,6 +36,50 @@ class School(Base):
     last_measurement = Column(DateTime)
 
 
+class Line(Base):
+    """Линия связи организации (ТЗ п.10, п.14): основная, резервная или отключённая.
+
+    Точка мониторинга (Device с line_id) измеряет ровно одну линию. Статус школы
+    определяется основной линией; резервная линия учитывается отдельно.
+    """
+    __tablename__ = "lines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), index=True)
+    code = Column(String, index=True)                  # идентификатор линии/подключения
+    role = Column(String, default="main")              # main | backup | disabled
+    provider = Column(String)
+    connection_type = Column(String)
+    contract_speed_down = Column(Float)
+    contract_speed_up = Column(Float)
+    status = Column(String)
+    current_download = Column(Float)
+    current_upload = Column(Float)
+    current_ping = Column(Float)
+    current_jitter = Column(Float)
+    current_packet_loss = Column(Float)
+    last_measurement = Column(DateTime)
+
+
+class Threshold(Base):
+    """Версия порогов оценки качества (ТЗ п.11). Строки не правятся — только добавляются:
+    замер хранит threshold_id, поэтому всегда известно, по каким порогам он оценён."""
+    __tablename__ = "thresholds"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String)
+    down_min = Column(Float)
+    up_min = Column(Float)
+    ping_max = Column(Float)
+    jitter_max = Column(Float)
+    loss_max = Column(Float)
+    availability_min = Column(Float)
+    contract_ratio = Column(Float)      # доля договорной скорости для сравнения с договором
+    incident_after = Column(Integer)    # подряд плохих замеров до создания инцидента
+    stale_after_min = Column(Integer)   # возраст замера, после которого данные не свежие
+
+
 class Device(Base):
     """Отдельный ПК-агент внутри школы — единица ПК-уровня прослеживания."""
     __tablename__ = "devices"
@@ -47,7 +91,9 @@ class Device(Base):
     room = Column(String)
     ip_address = Column(String)
     status = Column(String)
-    last_seen = Column(DateTime)
+    last_seen = Column(DateTime)                       # последний контакт (замер или пульс)
+    last_measured = Column(DateTime)                   # время последнего ЗАМЕРА — по нему считается свежесть
+    line_id = Column(Integer, ForeignKey("lines.id"), index=True, nullable=True)  # NULL — обычное рабочее место
 
     # --- ПК-уровень: инвентарь и идентичность ----------------------------
     device_type = Column(String, default="Рабочая станция")   # Шлюз / Рабочая станция / Ноутбук
@@ -96,6 +142,8 @@ class Measurement(Base):
     packet_loss = Column(Float)
     is_offline = Column(Boolean)
     source = Column(String, default="live")   # live | backfill (офлайн-догрузка)
+    status = Column(String)                   # результат оценки на момент приёма (ТЗ п.11)
+    threshold_id = Column(Integer)            # версия порогов, применённая при оценке
 
     __table_args__ = (
         Index("ix_measure_school_ts", "school_id", "timestamp"),
@@ -110,6 +158,7 @@ class Incident(Base):
     incident_number = Column(String, index=True)
     school_id = Column(Integer, index=True)
     device_id = Column(String)
+    line_id = Column(Integer, nullable=True)
     provider = Column(String)
     status = Column(String, index=True)
     start_time = Column(DateTime)
@@ -134,9 +183,10 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     full_name = Column(String)
     password_hash = Column(String)
-    role = Column(String, default="school")     # admin | operator | school | provider
+    role = Column(String, default="school")     # admin | operator | district | school | provider
     school_id = Column(Integer, nullable=True)  # для роли school — её школа
     provider_name = Column(String, nullable=True)  # для роли provider — его зона
+    district = Column(String, nullable=True)    # для роли district — район/город
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -169,6 +219,10 @@ class SyncBatch(Base):
     items = Column(Integer, default=0)
     status = Column(String, default="queued")   # queued | processing | done | failed
     error = Column(Text, nullable=True)
+    # Пакет хранится в БД до успешной записи замеров: ответ 202 означает «сохранено»,
+    # а не «лежит в памяти процесса». После done payload очищается.
+    payload = Column(Text, nullable=True)
+    attempts = Column(Integer, default=0)
 
     __table_args__ = (UniqueConstraint("device_id", "id", name="uq_sync_device_batch"),)
 
@@ -193,3 +247,47 @@ class FaultEvent(Base):
     origin = Column(String, default="simulator")   # simulator | operator
 
     __table_args__ = (Index("ix_fault_window", "start_time", "end_time"),)
+
+
+class OfficialSchool(Base):
+    """Справочник eGov. Не подменяет действующие школы с агентами без сверки ID."""
+    __tablename__ = "official_schools"
+    external_id = Column(String, primary_key=True)
+    district = Column(String, index=True)
+    settlement = Column(String)
+    address = Column(String)
+    lat = Column(Float)
+    lng = Column(Float)
+    students = Column(Integer)
+    source_url = Column(String)
+    fetched_at = Column(DateTime)
+    raw_json = Column(Text)
+
+
+class PublishedConnection(Base):
+    """Опубликованная характеристика, не договор и не измерение агента."""
+    __tablename__ = "published_connections"
+    key = Column(String, primary_key=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
+    school_name = Column(String)
+    district = Column(String)
+    technology = Column(String)
+    speed_down_mbps = Column(Float, nullable=True)
+    source_url = Column(String)
+    source_date = Column(String, nullable=True)
+    retrieved_at = Column(DateTime)
+    note = Column(Text)
+
+
+class ExternalSourceState(Base):
+    """Последний успешный снимок и состояние последней попытки обновления."""
+    __tablename__ = "external_source_states"
+    source = Column(String, primary_key=True)
+    status = Column(String)
+    attempted_at = Column(DateTime)
+    fetched_at = Column(DateTime, nullable=True)
+    window_start = Column(DateTime, nullable=True)
+    window_end = Column(DateTime, nullable=True)
+    source_url = Column(String)
+    error = Column(Text, nullable=True)
+    payload_json = Column(Text, default="{}")

@@ -112,11 +112,13 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
 
           <Section title="Анализ канала этого ПК">
             <Tag kind={RISK_CLASS[analytics.risk_level] || 'off'}>
-              риск {analytics.risk_score}/100 · {analytics.risk_level}
+              {analytics.samples ? `риск ${analytics.risk_score}/100 · ${analytics.risk_level}` : 'нет данных'}
             </Tag>
           </Section>
           <div className="block">
-            <p style={{ margin: '0 0 12px', fontSize: 13, lineHeight: 1.55 }}>{analytics.forecast}</p>
+            <p style={{ margin: '0 0 12px', fontSize: 13, lineHeight: 1.55 }}>
+              {analytics.samples ? analytics.forecast : 'Нет замеров за период — анализ не выполняется.'}
+            </p>
             {analytics.patterns.length ? analytics.patterns.map((pattern) => (
               <div key={pattern.type + pattern.key} style={{
                 display: 'flex', gap: 10, alignItems: 'center', padding: '9px 0',
