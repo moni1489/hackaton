@@ -84,6 +84,9 @@ export const api = {
     request(`/api/web/incidents/${id}?new_status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
   riskQueue: (limit = 6) => request(`/api/web/risk-queue?limit=${limit}`),
   trend: (hours = 24) => request(`/api/web/trend?hours=${hours}`),
+  rating: (days = 30) => request(`/api/web/rating?days=${days}`),
+  ratingHistory: (days = 90, schoolId) =>
+    request(`/api/web/rating/history?days=${days}${schoolId ? `&school_id=${schoolId}` : ''}`),
   system: () => request('/api/web/system'),
   audit: () => request('/api/auth/audit?limit=60'),
   policy: () => request('/api/auth/policy'),

@@ -7,18 +7,20 @@ import Login from './Login';
 import MapView from './MapView';
 import DiagnosticsPage from './Diagnostics';
 import PublicDataPage from './PublicData';
+import RatingPage from './Rating';
 import { AdminPage, DevicesPage, IncidentsPage, SchoolsPage } from './Pages';
 import Rail from './Rail';
 import SchoolDrawer from './SchoolDrawer';
 import {
   IcoAlert, IcoBell, IcoCal, IcoChevron, IcoClock, IcoDown, IcoGear, IcoLayers,
-  IcoLogout, IcoMap, IcoNodes, IcoPc, IcoPulse, IcoSchool, IcoSearch,
+  IcoLogout, IcoMap, IcoNodes, IcoPc, IcoPulse, IcoSchool, IcoSearch, IcoTrend,
 } from './icons';
 import { STATUS, fmtAge, fmtStamp } from './ui';
 
 const NAV = [
   { key: 'map', label: 'Карта области', Icon: IcoMap },
   { key: 'schools', label: 'Школы', Icon: IcoSchool },
+  { key: 'rating', label: 'Рейтинг', Icon: IcoTrend },
   { key: 'devices', label: 'ПК-агенты', Icon: IcoPc },
   { key: 'diagnostics', label: 'Диагностика', Icon: IcoNodes },
   { key: 'public-data', label: 'Открытые данные', Icon: IcoLayers },
@@ -28,7 +30,7 @@ const NAV = [
 
 const TITLES = {
   'public-data': 'Открытые данные и внешняя проверка',
-  map: 'Мониторинг', schools: 'Школы', devices: 'ПК-агенты',
+  map: 'Мониторинг', schools: 'Школы', rating: 'Рейтинг организаций', devices: 'ПК-агенты',
   diagnostics: 'Диагностика · кто виноват', incidents: 'Инциденты', admin: 'Управление',
 };
 
@@ -366,6 +368,7 @@ function Dashboard({ user, onLogout }) {
         ) : null}
 
         {view === 'schools' ? <SchoolsPage schools={schools} onOpenSchool={openSchool} /> : null}
+        {view === 'rating' ? <RatingPage onOpenSchool={openSchool} /> : null}
         {view === 'public-data' ? <PublicDataPage /> : null}
         {view === 'devices' ? <DevicesPage onOpenDevice={setDeviceDrawer} /> : null}
         {view === 'diagnostics' ? (

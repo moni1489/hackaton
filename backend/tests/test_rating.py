@@ -14,6 +14,8 @@ os.environ.setdefault("DATABASE_URL", f"sqlite:///{tempfile.mkdtemp()}/rating.db
 os.environ.setdefault("EXTERNAL_POLL_ENABLED", "false")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from sqlalchemy import create_engine  # noqa: E402
+
 import app.database as database  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.models import Device, Line, Measurement, School  # noqa: E402
@@ -21,7 +23,7 @@ from app.services import rating  # noqa: E402
 from app.services.retention import MIN_RETENTION_DAYS, purge_old_measurements  # noqa: E402
 from app.services.status import STATUS_OK, classify  # noqa: E402
 
-NOW = datetime(2026, 6, 30, 12, 0)
+NOW = datetime.utcnow().replace(microsecond=0)
 CONTRACTS = {9001: (None, None), 9002: (10.0, 10.0), 9003: (100.0, 5.0), 9004: (500.0, 500.0)}
 
 
@@ -45,7 +47,12 @@ def _fixture(db):
 class RatingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        database.Base.metadata.create_all(database.engine)
+        # Своя временная БД, что бы ни импортировал соседний модуль: боевую базу не трогаем.
+        engine = create_engine(f"sqlite:///{tempfile.mkdtemp()}/rating.db",
+                               connect_args={"check_same_thread": False})
+        database.engine = engine
+        database.SessionLocal.configure(bind=engine)
+        database.Base.metadata.create_all(engine)
         cls.db = database.SessionLocal()
         _fixture(cls.db)
 
@@ -102,12 +109,9 @@ class RatingTests(unittest.TestCase):
                 db.add(Measurement(device_id="RT-old", school_id=school, timestamp=NOW - timedelta(days=age)))
             db.add(Measurement(device_id="RT-old", school_id=9103, timestamp=NOW))
             db.commit()
-            newest = db.query(Measurement).order_by(Measurement.timestamp.desc()).first().timestamp
             purge_old_measurements(db)
             left = {m.school_id for m in db.query(Measurement).filter(Measurement.school_id.in_([9101, 9102]))}
-            # относительно самого свежего замера в базе: моложе квартала — остаётся, старше — удалён
-            self.assertEqual(left, {9101} if newest == NOW else left)
-            self.assertNotIn(9102, left)
+            self.assertEqual(left, {9101})   # моложе квартала остаётся, старше — удалён
         finally:
             db.query(Measurement).filter(Measurement.school_id.in_([9101, 9102, 9103])).delete()
             db.commit()
