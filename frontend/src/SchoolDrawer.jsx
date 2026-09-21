@@ -154,7 +154,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
         <div className="drawer-body">
           <div className="metric-row">
             <Metric label="Загрузка" value={school.current_download} unit=" Мбит/с"
-              sub={`${ratio}% от договорной`} color={ratio < 60 ? '#B32318' : '#157347'} />
+              sub={`${ratio}% от договорной`} color={ratio < 60 ? '#E0453E' : '#17A65B'} />
             <Metric label="Отдача" value={school.current_upload} unit=" Мбит/с"
               sub={`договор ${school.contract_speed_up} Мбит/с`} />
             <Metric label="Задержка" value={school.current_ping} unit=" мс"
@@ -258,7 +258,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                       </span>
                     </div>
                     <Bar value={analytics.sla_compliance_pct}
-                      color={analytics.sla_compliance_pct >= 95 ? '#157347' : '#A9690B'} />
+                      color={analytics.sla_compliance_pct >= 95 ? '#17A65B' : '#E4962A'} />
                   </div>
                   <div>
                     <div className="eyebrow" style={{ marginBottom: 8 }}>Стабильность канала</div>
@@ -268,7 +268,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                         тренд {analytics.trend_pct > 0 ? '+' : ''}{analytics.trend_pct}%
                       </span>
                     </div>
-                    <Bar value={analytics.stability} color="#1B5AA8" />
+                    <Bar value={analytics.stability} color="#2F6BF6" />
                   </div>
                 </div>
                 {analytics.patterns.length ? (

@@ -7,14 +7,14 @@ import {
 } from 'recharts';
 
 export const SERIES = {
-  download: '#1B5AA8',
-  upload: '#0F7A6B',
-  ping: '#A9690B',
-  jitter: '#8A3470',
+  download: '#2F6BF6',
+  upload: '#0E9C8A',
+  ping: '#D9730D',
+  jitter: '#B23A8E',
 };
 
-const AXIS = { fontSize: 10.5, fill: '#6B7480', fontFamily: 'IBM Plex Mono, monospace' };
-const GRID = '#E9EBEF';
+const AXIS = { fontSize: 10.5, fill: '#8B95AB', fontFamily: 'JetBrains Mono, monospace' };
+const GRID = '#EEF0F4';
 
 const fmtTime = (iso) => {
   if (!iso) return '';
@@ -26,17 +26,17 @@ function TipBox({ active, payload, label, unit }) {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: '#fff', border: '1px solid #D4D8DE', borderRadius: 0,
+      background: '#fff', border: '1px solid #E6E9EF', borderRadius: 12,
       boxShadow: '0 12px 40px rgba(16,24,40,.14)', padding: '10px 13px', fontSize: 12,
     }}>
-      <div style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#6B7480', marginBottom: 6 }}>
+      <div style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8B95AB', marginBottom: 6 }}>
         {label}
       </div>
       {payload.map((p) => (
         <div key={p.dataKey} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
           <i style={{ width: 8, height: 8, borderRadius: 2, background: p.color, display: 'block' }} />
-          <span style={{ color: '#434A54', fontWeight: 600 }}>{p.name}</span>
-          <b style={{ marginLeft: 'auto', fontFamily: 'IBM Plex Mono, monospace' }}>
+          <span style={{ color: '#46506A', fontWeight: 600 }}>{p.name}</span>
+          <b style={{ marginLeft: 'auto', fontFamily: 'JetBrains Mono, monospace' }}>
             {p.value} {unit}
           </b>
         </div>
@@ -45,7 +45,7 @@ function TipBox({ active, payload, label, unit }) {
   );
 }
 
-const legendStyle = { fontSize: 11, fontWeight: 600, color: '#434A54', paddingTop: 6 };
+const legendStyle = { fontSize: 11, fontWeight: 600, color: '#46506A', paddingTop: 6 };
 
 /** Скорость канала: загрузка и отдача, одна шкала (Мбит/с). */
 export function SpeedChart({ measurements, contract, height = 210 }) {
@@ -73,9 +73,9 @@ export function SpeedChart({ measurements, contract, height = 210 }) {
         <XAxis dataKey="t" tick={AXIS} axisLine={false} tickLine={false} minTickGap={44} />
         <YAxis tick={AXIS} axisLine={false} tickLine={false} width={46} />
         {contract ? (
-          <ReferenceLine y={contract} stroke="#6B7480" strokeDasharray="4 4"
+          <ReferenceLine y={contract} stroke="#8B95AB" strokeDasharray="4 4"
             label={{ value: `договор ${contract}`, position: 'insideTopRight',
-                     fill: '#6B7480', fontSize: 10 }} />
+                     fill: '#8B95AB', fontSize: 10 }} />
         ) : null}
         <Tooltip content={<TipBox unit="Мбит/с" />} />
         <Legend wrapperStyle={legendStyle} iconType="plainline" iconSize={14} />
@@ -103,8 +103,8 @@ export function LatencyChart({ measurements, height = 190 }) {
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey="t" tick={AXIS} axisLine={false} tickLine={false} minTickGap={44} />
         <YAxis tick={AXIS} axisLine={false} tickLine={false} width={46} />
-        <ReferenceLine y={80} stroke="#6B7480" strokeDasharray="4 4"
-          label={{ value: 'порог 80 мс', position: 'insideTopRight', fill: '#6B7480', fontSize: 10 }} />
+        <ReferenceLine y={80} stroke="#8B95AB" strokeDasharray="4 4"
+          label={{ value: 'порог 80 мс', position: 'insideTopRight', fill: '#8B95AB', fontSize: 10 }} />
         <Tooltip content={<TipBox unit="мс" />} />
         <Legend wrapperStyle={legendStyle} iconType="plainline" iconSize={14} />
         <Line type="monotone" dataKey="ping" name="Задержка" stroke={SERIES.ping}
@@ -129,15 +129,15 @@ export function LossChart({ measurements, height = 150 }) {
       <AreaChart data={data} margin={{ top: 6, right: 10, left: -18, bottom: 0 }}>
         <defs>
           <linearGradient id="gLoss" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#B32318" stopOpacity={0.25} />
-            <stop offset="100%" stopColor="#B32318" stopOpacity={0} />
+            <stop offset="0%" stopColor="#E0453E" stopOpacity={0.25} />
+            <stop offset="100%" stopColor="#E0453E" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey="t" tick={AXIS} axisLine={false} tickLine={false} minTickGap={44} />
         <YAxis tick={AXIS} axisLine={false} tickLine={false} width={46} unit="%" />
         <Tooltip content={<TipBox unit="%" />} />
-        <Area type="monotone" dataKey="loss" name="Потери пакетов" stroke="#B32318"
+        <Area type="monotone" dataKey="loss" name="Потери пакетов" stroke="#E0453E"
               strokeWidth={2} fill="url(#gLoss)" dot={false} activeDot={{ r: 4, strokeWidth: 2 }} />
       </AreaChart>
     </ResponsiveContainer>
@@ -145,7 +145,7 @@ export function LossChart({ measurements, height = 150 }) {
 }
 
 /** Микро-спарклайн под KPI: без осей, только форма тренда. */
-export function Spark({ points, color = '#1B5AA8', height = 34 }) {
+export function Spark({ points, color = '#2F6BF6', height = 34 }) {
   if (!points?.length) return null;
   const data = points.map((value, index) => ({ i: index, value }));
   return (

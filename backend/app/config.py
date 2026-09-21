@@ -41,10 +41,18 @@ class Settings(BaseSettings):
     INTERVAL_UNSTABLE_SEC: int = 180    # «Нестабильно» — углублённая диагностика
     INTERVAL_CRITICAL_SEC: int = 60     # «Критично» — максимальная частота
 
-    # --- Пороги SLA --------------------------------------------------------
-    SLA_SPEED_RATIO: float = 0.6        # факт < 60% договора => нарушение
-    SLA_PING_MS: float = 80.0
-    SLA_LOSS_PCT: float = 2.0
+    # --- Пороги (ТЗ п.11) --------------------------------------------------
+    # Это стартовые значения: рабочие пороги хранятся в таблице thresholds
+    # (версиями) и меняются администратором через API без правки кода.
+    SLA_DOWN_MBPS: float = 20.0         # Download не менее
+    SLA_UP_MBPS: float = 20.0           # Upload не менее
+    SLA_PING_MS: float = 100.0          # Ping не более
+    SLA_JITTER_MS: float = 30.0         # Jitter не более
+    SLA_LOSS_PCT: float = 2.0           # Packet Loss не более
+    SLA_AVAILABILITY_PCT: float = 99.0  # доступность за расчётный период не менее
+    SLA_SPEED_RATIO: float = 0.6        # сравнение с договором: факт < 60% договорной => нарушение
+    INCIDENT_AFTER_BAD: int = 3         # инцидент — после стольких подряд плохих замеров
+    STALE_AFTER_MIN: int = 90           # старше — школа «нет свежих данных», а не «норма»
 
     # --- AI ----------------------------------------------------------------
     GENAI_TOKEN: str = ""

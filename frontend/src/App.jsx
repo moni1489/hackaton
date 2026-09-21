@@ -121,7 +121,7 @@ function Dashboard({ user, onLogout }) {
           </div>
           <div className="brand-text">
             <div className="brand-name">САМ ВКО</div>
-            <div className="brand-sub">Мониторинг связи · ВКО</div>
+            <div className="brand-sub">МОНИТОРИНГ СВЯЗИ</div>
           </div>
         </div>
 
@@ -250,8 +250,8 @@ function Dashboard({ user, onLogout }) {
                   </div>
                 </div>
                 <div className="mini-stats">
-                  {[['Норма', counts.normal, '#157347'], ['Нестаб.', counts.unstable, '#A9690B'],
-                    ['Авария', (counts.critical || 0) + (counts.offline || 0), '#B32318']].map(
+                  {[['Норма', counts.normal, '#17A65B'], ['Нестаб.', counts.unstable, '#E4962A'],
+                    ['Авария', (counts.critical || 0) + (counts.offline || 0), '#E0453E']].map(
                     ([label, value, color]) => (
                       <div className="mini-stat" key={label}>
                         <div className="k">{label}</div>
@@ -270,10 +270,10 @@ function Dashboard({ user, onLogout }) {
                 sub={`в сети ${overview?.devices_online ?? 0}`}
                 badge={{ text: 'ПК-уровень', kind: 'flat' }} />
               <Kpi label="Средняя скорость" value={overview?.avg_download ?? '—'} unit="Мбит/с"
-                sub="загрузка по области" spark={sparks.download} sparkColor="#1B5AA8"
+                sub="загрузка по области" spark={sparks.download} sparkColor="#2F6BF6"
                 badge={{ text: `↑ ${overview?.avg_upload ?? 0}`, kind: 'up' }} />
               <Kpi label="Задержка" value={overview?.avg_ping ?? '—'} unit="мс"
-                sub={`потери ${overview?.avg_loss ?? 0}%`} spark={sparks.ping} sparkColor="#A9690B"
+                sub={`потери ${overview?.avg_loss ?? 0}%`} spark={sparks.ping} sparkColor="#D9730D"
                 badge={{ text: (overview?.avg_ping ?? 0) < 80 ? 'в норме' : 'выше порога',
                          kind: (overview?.avg_ping ?? 0) < 80 ? 'up' : 'down' }} />
               <Kpi label="Инцидентов" value={overview?.active_incidents ?? '—'}

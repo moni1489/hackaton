@@ -1,0 +1,2 @@
+# Optional: only for authenticated live M-Lab BigQuery queries.
+google-cloud-bigquery>=3.25,<4

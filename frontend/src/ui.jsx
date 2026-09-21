@@ -1,16 +1,16 @@
 /* Общие представления статусов и мелкие визуальные примитивы. */
 export const STATUS = {
-  'Норма': { key: 'ok', color: '#157347', short: 'Норма', weight: 0 },
-  'Нестабильно': { key: 'warn', color: '#A9690B', short: 'Нестабильно', weight: 1 },
-  'Критично': { key: 'danger', color: '#B32318', short: 'Критично', weight: 2 },
-  'Нет соединения': { key: 'off', color: '#5B6572', short: 'Нет связи', weight: 3 },
+  'Норма': { key: 'ok', color: '#17A65B', short: 'Норма', weight: 0 },
+  'Нестабильно': { key: 'warn', color: '#E4962A', short: 'Нестабильно', weight: 1 },
+  'Критично': { key: 'danger', color: '#E0453E', short: 'Критично', weight: 2 },
+  'Нет соединения': { key: 'off', color: '#64748B', short: 'Нет связи', weight: 3 },
 };
 export const statusMeta = (status) => STATUS[status] || STATUS['Нет соединения'];
 
 export const DEVICE_STATUS = {
-  online: { label: 'В сети', cls: 'ok', color: '#157347' },
-  warning: { label: 'Отклонения', cls: 'warn', color: '#A9690B' },
-  offline: { label: 'Не в сети', cls: 'off', color: '#5B6572' },
+  online: { label: 'В сети', cls: 'ok', color: '#17A65B' },
+  warning: { label: 'Отклонения', cls: 'warn', color: '#E4962A' },
+  offline: { label: 'Не в сети', cls: 'off', color: '#64748B' },
 };
 export const deviceMeta = (status) => DEVICE_STATUS[status] || DEVICE_STATUS.offline;
 
@@ -46,7 +46,7 @@ export const Tag = ({ kind = 'info', children, className = '' }) => (
   <span className={`tag ${kind} ${className}`}>{children}</span>
 );
 
-export const Bar = ({ value, color = '#1B5AA8' }) => (
+export const Bar = ({ value, color = '#2F6BF6' }) => (
   <div className="bar"><i style={{ width: `${Math.max(0, Math.min(100, value))}%`, background: color }} /></div>
 );
 

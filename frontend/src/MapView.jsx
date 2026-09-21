@@ -103,7 +103,7 @@ export default function MapView({ schools, mode, onOpenSchool, onSelect, selecte
       node.className = 'map-pop';
       node.innerHTML = `
         <div class="map-pop-code">
-          <span class="mono" style="font-size:11px;color:#6B7480;font-weight:700">${props.code}</span>
+          <span class="mono" style="font-size:11px;color:#8B95AB;font-weight:700">${props.code}</span>
           <span class="tag ${meta.key}">${props.status}</span>
         </div>
         <div class="map-pop-name">${props.name}</div>
@@ -157,7 +157,7 @@ export default function MapView({ schools, mode, onOpenSchool, onSelect, selecte
     const applyPaint = () => {
       if (!instance.getLayer('schools-dot')) return;
       instance.setPaintProperty('schools-dot', 'circle-stroke-color',
-        mode === 'satellite' ? '#14181D' : '#ffffff');
+        mode === 'satellite' ? '#0E1420' : '#ffffff');
     };
 
     const run = () => {
