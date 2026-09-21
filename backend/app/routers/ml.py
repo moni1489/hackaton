@@ -1,4 +1,4 @@
-"""ML API — «Виновник»: атрибуция причины деградации и прогноз пробоя SLA.
+"""ML API: атрибуция причины деградации и прогноз пробоя SLA.
 
 Отвечает на два вопроса, которых не было в системе:
   • кто виноват в текущей деградации — провайдер, район, школа или конкретный ПК;
@@ -20,7 +20,7 @@ from ..services.ml import attribution, baseline, forecast
 from ..services.ml.features import CAUSES, CAUSE_LABELS, CAUSE_OWNER
 from ..services.ml.train import train_models
 
-router = APIRouter(prefix="/api/ml", tags=["ML API — «Виновник»"])
+router = APIRouter(prefix="/api/ml", tags=["ML API"])
 
 
 def _visible(db: Session, user: User) -> list[int] | None:

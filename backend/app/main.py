@@ -76,7 +76,7 @@ app = FastAPI(
         {"name": "Web API", "description": "Дашборд, карта, карточка школы, ПК-уровень"},
         {"name": "Admin API", "description": "Управление агентами и пользователями"},
         {"name": "Integration / AI API", "description": "Претензии и PDF-акты SLA"},
-        {"name": "ML API — «Виновник»", "description": "Атрибуция причины деградации "
+        {"name": "ML API", "description": "Атрибуция причины деградации "
                                                        "и прогноз пробоя SLA"},
     ],
 )

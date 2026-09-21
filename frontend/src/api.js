@@ -99,7 +99,7 @@ export const api = {
       { method: 'POST' }),
   generateClaim: (incidentId) => request(`/api/ai/claim/${incidentId}`, { method: 'POST' }),
 
-  // --- «Виновник»: ML-атрибуция причины и прогноз пробоя SLA ---
+  // --- ML: атрибуция причины и прогноз пробоя SLA ---
   mlBoard: (limit = 40) => request(`/api/ml/board?limit=${limit}`),
   mlSummary: () => request('/api/ml/summary'),
   mlAttribution: (schoolId) => request(`/api/ml/attribution/${schoolId}`),

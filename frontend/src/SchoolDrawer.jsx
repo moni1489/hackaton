@@ -224,7 +224,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
           </div>
           <div className="block"><LatencyChart measurements={measurements} /></div>
 
-          {/* --- «Виновник»: заключение об источнике деградации --- */}
+          {/* --- ML: заключение об источнике деградации --- */}
           {verdict && !verdict.error ? (
             <>
               <Section title="Предполагаемый источник">

@@ -323,7 +323,7 @@ export function IncidentsPage({ incidents, role, onOpenSchool, onReload }) {
             <thead>
               <tr>
                 <th>Номер</th><th>Школа</th><th>Район</th><th>Поставщик</th>
-                <th>Вердикт «Виновника»</th><th>ПК-источник</th><th>Начало</th>
+                <th>Вердикт ML</th><th>ПК-источник</th><th>Начало</th>
                 <th>Описание</th><th>Статус</th>
                 {canManage ? <th>Действие</th> : null}
               </tr>

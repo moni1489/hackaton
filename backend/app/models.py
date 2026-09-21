@@ -167,7 +167,7 @@ class Incident(Base):
     ai_claim_text = Column(Text, nullable=True)
     severity = Column(String, default="major")  # minor | major | critical
 
-    # --- ML-атрибуция причины (killer feature «Виновник») -----------------
+    # --- ML-атрибуция причины ---------------------------------------------
     root_cause = Column(String, index=True)        # device | school_lan | provider_node | regional
     root_cause_confidence = Column(Float)          # уверенность модели 0..1
     root_cause_evidence = Column(Text)             # JSON: признаки и доказательная база
