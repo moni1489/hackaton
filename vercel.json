@@ -1,9 +1,0 @@
-{
-  "framework": "vite",
-  "installCommand": "if [ -d frontend ]; then cd frontend && npm install; else npm install; fi",
-  "buildCommand": "if [ -d frontend ]; then cd frontend && npm run build; else npm run build; fi",
-  "outputDirectory": "frontend/dist",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
-  ]
-}
