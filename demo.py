@@ -383,13 +383,14 @@ def cmd_test(args) -> None:
     have_redis = docker_redis()
     say("Redis для тестов: " + ("есть" if have_redis else "нет — тесты Redis будут пропущены"))
     env = {"DEMO_TEST_REDIS_URL": TEST_REDIS}
-    run([sys.executable, "-m", "unittest", "tests.test_demo", "-v"], cwd=BACKEND, env=env)
-    if not args.quick:
-        say("\nСуществующие тесты проекта (регрессия)")
-        run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"], cwd=BACKEND, env=env)
-        say("\nFrontend: линт и сборка")
-        run([npm(), "run", "lint"], cwd=FRONTEND, check=False)
-        build_frontend()
+    if args.quick:      # только демонстрация: API/синхронизация/Redis + браузеры (если есть playwright и Chromium)
+        run([sys.executable, "-m", "unittest", "tests.test_demo", "tests.test_demo_ui", "-v"], cwd=BACKEND, env=env)
+        return
+    say("Тесты backend: демонстрация и существующие тесты проекта")
+    run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"], cwd=BACKEND, env=env)
+    say("\nFrontend: линт и сборка")
+    run([npm(), "run", "lint"], cwd=FRONTEND, check=False)
+    build_frontend()
 
 
 def cmd_load(args) -> None:
