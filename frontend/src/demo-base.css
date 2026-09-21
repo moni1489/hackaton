@@ -1,0 +1,32 @@
+/* Базовые стили демо-страниц (/live, /demo). Токены и примитивы — копия нужного из index.css.
+   Намеренно БЕЗ index.css: он подтягивает шрифты с fonts.googleapis.com, и при Wi-Fi без выхода
+   в интернет это блокирует отрисовку. Здесь — системные шрифты, страница открывается офлайн. */
+:root {
+  --bg: #F4F5F7; --surface: #FFFFFF; --surface-2: #F7F8FA; --surface-3: #EEF0F4;
+  --ink: #0E1420; --ink-2: #46506A; --ink-3: #8B95AB; --line: #E6E9EF; --line-strong: #D6DBE5;
+  --accent: #2F6BF6; --accent-soft: #EDF3FF; --ok: #17A65B; --ok-soft: #E7F7EE;
+  --warn: #E4962A; --warn-soft: #FDF3E2; --danger: #E0453E; --danger-soft: #FCEBEA;
+  --off: #64748B; --off-soft: #EEF1F5; --violet: #7C5CF0; --dark: #14181F;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06); --shadow-md: 0 4px 16px rgba(16, 24, 40, .08);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; font-size: 14px; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased;
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; border: none; background: none; }
+a { color: inherit; text-decoration: none; }
+.mono { font-family: var(--mono); font-feature-settings: 'tnum'; }
+.eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
+.btn {
+  padding: 11px 12px; border-radius: 11px; font-size: 11.5px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; background: var(--surface-3); color: var(--ink-2); transition: background .15s;
+}
+.btn:hover { background: var(--line); }
+.btn.accent { background: var(--accent); color: #fff; }
+.btn.accent:hover { background: #245BDC; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
