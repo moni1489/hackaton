@@ -105,8 +105,10 @@ def classify(download: float, ping: float, loss: float, contract_down: float | N
              th: Thresholds | None = None) -> str:
     """Статус замера по Download, Upload, Ping, Jitter и Packet Loss.
 
-    upload/jitter необязательны: старые вызовы без них оценивают только то, что передали.
-    «Критично» — выход за порог в 2–2.5 раза (для скоростей — вдвое ниже порога).
+    Download сравнивается с базовым порогом ТЗ и с долей договорной скорости (что строже),
+    Upload, Ping, Jitter, Packet Loss — с базовыми порогами. upload/jitter необязательны:
+    вызовы без них оценивают только то, что передали.
+    «Критично» — выход за порог в 1.5–2.5 раза (для скоростей — вдвое ниже порога).
     """
     if is_offline or download <= 0:
         return STATUS_OFFLINE
@@ -115,7 +117,12 @@ def classify(download: float, ping: float, loss: float, contract_down: float | N
               (ping, th.ping_max, 1, 1.5),
               (loss, th.loss_max, 1, 2.5)]
     if upload is not None:
-        checks.append((upload, speed_floor(th.up_min, contract_up, th.contract_ratio), -1, 0.5))
+        # Upload — только по базовому порогу ТЗ (у договора с меньшей скоростью — по договору).
+        # Долю от договорной, как для Download, не применяем: ТЗ этого не требует, а
+        # ассиметричный реальный upload при симметричном договоре давал бы «нарушение» всегда.
+        up_floor = th.up_min if not contract_up or contract_up >= th.up_min \
+            else th.contract_ratio * contract_up
+        checks.append((upload, up_floor, -1, 0.5))
     if jitter is not None:
         checks.append((jitter, th.jitter_max, 1, 1.5))
 
