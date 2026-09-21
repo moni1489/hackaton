@@ -13,9 +13,10 @@ from fastapi.responses import JSONResponse
 
 from .cache import backend_name
 from .config import settings
-from .database import Base, engine
+from .database import SessionLocal, engine, migrate_schema
 from .routers import admin, agent, ai, auth, ml, web, public_data
 from .services.external_network import poll_sources
+from .services.lines import ensure_defaults
 from .services.smart_sync import start_workers, stats, stop_workers
 
 logging.basicConfig(level=logging.INFO,
@@ -25,7 +26,10 @@ log = logging.getLogger("app")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    for column in migrate_schema():
+        log.info("Миграция схемы: + %s", column)
+    with SessionLocal() as db:
+        ensure_defaults(db)
     await start_workers()
     external_task = asyncio.create_task(poll_sources()) if settings.EXTERNAL_POLL_ENABLED else None
     log.info("Запуск: БД=%s, кэш=%s", engine.dialect.name, backend_name())
