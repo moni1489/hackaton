@@ -61,6 +61,7 @@ logging.basicConfig(
         logging.FileHandler(STATE_DIR / "agent.log", encoding="utf-8"),
     ],
 )
+logging.getLogger("pystray").setLevel(logging.CRITICAL)
 
 # ── Статус агента (shared state) ───────────────────────────────────────────────
 STATUS = {
@@ -550,12 +551,28 @@ class StatusWindow(tk.Toplevel):
             ttk.Label(row_f, textvariable=var, anchor="w",
                       font=("Segoe UI", 10, "bold")).pack(side="left")
 
+        def open_report():
+            try:
+                if STATE_FILE.exists():
+                    st = json.loads(STATE_FILE.read_text())
+                    sid = st.get("school_id")
+                    if sid:
+                        cfg = json.loads(CONFIG_FILE.read_text()) if CONFIG_FILE.exists() else {}
+                        backend = cfg.get("backend", "https://codemasters1.onrender.com")
+                        webbrowser.open(f"{backend}/api/ai/sla-report/{sid}")
+                        return
+            except Exception:
+                pass
+            webbrowser.open("https://codemasters1.onrender.com")
+
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=(16, 0))
-        ttk.Button(btn_frame, text="Открыть панель",
+        ttk.Button(btn_frame, text="Панель",
                    command=lambda: webbrowser.open("http://localhost:5173")).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Акт SLA (PDF)",
+                   command=open_report).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Скрыть",
-                   command=self.withdraw).pack(side="left", padx=4)
+                   command=self.iconify).pack(side="left", padx=4)
 
         self.deiconify()   # отображаем окно статуса при запуске
 
