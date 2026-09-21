@@ -76,7 +76,7 @@ export default function Rail({ overview, incidents, schools, onOpenSchool, onOpe
                 <div className="insight-title sm">{risk.school_name}</div>
                 <div className="insight-meter">
                   <Bar value={risk.risk_score}
-                    color={risk.risk_score > 60 ? '#E0453E' : risk.risk_score > 30 ? '#E4962A' : '#17A65B'} />
+                    color={risk.risk_score > 60 ? '#B32318' : risk.risk_score > 30 ? '#A9690B' : '#157347'} />
                   <span>{risk.risk_score}/100</span>
                 </div>
                 <p className="insight-note">
@@ -128,7 +128,7 @@ export default function Rail({ overview, incidents, schools, onOpenSchool, onOpe
                   <div className="insight-title sm">{device.school_name}</div>
                   <div className="insight-meter">
                     <Bar value={device.sla_compliance_pct ?? 0}
-                      color={(device.sla_compliance_pct ?? 0) >= 95 ? '#17A65B' : '#E4962A'} />
+                      color={(device.sla_compliance_pct ?? 0) >= 95 ? '#157347' : '#A9690B'} />
                     <span>SLA {device.sla_compliance_pct ?? 0}%</span>
                   </div>
                   <p className="insight-note">
@@ -164,7 +164,7 @@ function Insights({ overview, counts, risks, schools, onOpenSchool }) {
             {healthy >= 70 ? 'Стабильное' : healthy >= 45 ? 'Требует внимания' : 'Напряжённое'}
           </div>
           <div className="insight-meter">
-            <Bar value={healthy} color={healthy >= 70 ? '#17A65B' : healthy >= 45 ? '#E4962A' : '#E0453E'} />
+            <Bar value={healthy} color={healthy >= 70 ? '#157347' : healthy >= 45 ? '#A9690B' : '#B32318'} />
             <span>{healthy}%</span>
           </div>
           <p className="insight-note">
@@ -197,7 +197,7 @@ function Insights({ overview, counts, risks, schools, onOpenSchool }) {
             <Tag kind="danger">Приоритет вмешательства</Tag>
             <div className="insight-title sm">{worst.school_name}</div>
             <div className="insight-meter">
-              <Bar value={worst.risk_score} color="#E0453E" />
+              <Bar value={worst.risk_score} color="#B32318" />
               <span>{worst.risk_score}/100</span>
             </div>
             <p className="insight-note">{worst.forecast}</p>

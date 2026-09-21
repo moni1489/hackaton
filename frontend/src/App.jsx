@@ -64,6 +64,7 @@ function Dashboard({ user, onLogout }) {
   const [mapMode, setMapMode] = useState('points');
   const [slaLayer, setSlaLayer] = useState(false);
   const [mapCollapsed, setMapCollapsed] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
 
   const [selectedId, setSelectedId] = useState(null);
   const [schoolDrawer, setSchoolDrawer] = useState(null);
@@ -111,7 +112,7 @@ function Dashboard({ user, onLogout }) {
   const openSchool = (id) => { setSelectedId(id); setSchoolDrawer(id); };
 
   return (
-    <div className="shell">
+    <div className={`shell ${navCollapsed ? 'nav-min' : ''}`}>
       {/* ---------- Боковая навигация ---------- */}
       <aside className="sidebar">
         <div className="brand">
@@ -120,14 +121,21 @@ function Dashboard({ user, onLogout }) {
           </div>
           <div className="brand-text">
             <div className="brand-name">САМ ВКО</div>
-            <div className="brand-sub">МОНИТОРИНГ СВЯЗИ</div>
+            <div className="brand-sub">Мониторинг связи · ВКО</div>
           </div>
         </div>
+
+        <button className="nav-collapse" onClick={() => setNavCollapsed((v) => !v)}
+          aria-expanded={!navCollapsed}
+          title={navCollapsed ? 'Развернуть меню' : 'Свернуть меню'}>
+          <IcoChevron style={{ transform: `rotate(${navCollapsed ? -90 : 90}deg)` }} />
+          <span>Свернуть меню</span>
+        </button>
 
         <nav className="nav">
           {NAV.map(({ key, label, Icon }) => (
             <button key={key} className={`nav-item ${view === key ? 'active' : ''}`}
-              onClick={() => setView(key)}>
+              title={label} onClick={() => setView(key)}>
               <Icon size={17} /><span>{label}</span>
               {key === 'incidents' && incidents.length
                 ? <span className="nav-badge">{incidents.length}</span> : null}
@@ -242,8 +250,8 @@ function Dashboard({ user, onLogout }) {
                   </div>
                 </div>
                 <div className="mini-stats">
-                  {[['Норма', counts.normal, '#17A65B'], ['Нестаб.', counts.unstable, '#E4962A'],
-                    ['Авария', (counts.critical || 0) + (counts.offline || 0), '#E0453E']].map(
+                  {[['Норма', counts.normal, '#157347'], ['Нестаб.', counts.unstable, '#A9690B'],
+                    ['Авария', (counts.critical || 0) + (counts.offline || 0), '#B32318']].map(
                     ([label, value, color]) => (
                       <div className="mini-stat" key={label}>
                         <div className="k">{label}</div>
@@ -262,10 +270,10 @@ function Dashboard({ user, onLogout }) {
                 sub={`в сети ${overview?.devices_online ?? 0}`}
                 badge={{ text: 'ПК-уровень', kind: 'flat' }} />
               <Kpi label="Средняя скорость" value={overview?.avg_download ?? '—'} unit="Мбит/с"
-                sub="загрузка по области" spark={sparks.download} sparkColor="#2F6BF6"
+                sub="загрузка по области" spark={sparks.download} sparkColor="#1B5AA8"
                 badge={{ text: `↑ ${overview?.avg_upload ?? 0}`, kind: 'up' }} />
               <Kpi label="Задержка" value={overview?.avg_ping ?? '—'} unit="мс"
-                sub={`потери ${overview?.avg_loss ?? 0}%`} spark={sparks.ping} sparkColor="#D9730D"
+                sub={`потери ${overview?.avg_loss ?? 0}%`} spark={sparks.ping} sparkColor="#A9690B"
                 badge={{ text: (overview?.avg_ping ?? 0) < 80 ? 'в норме' : 'выше порога',
                          kind: (overview?.avg_ping ?? 0) < 80 ? 'up' : 'down' }} />
               <Kpi label="Инцидентов" value={overview?.active_incidents ?? '—'}
@@ -273,43 +281,40 @@ function Dashboard({ user, onLogout }) {
                 badge={{ text: 'SLA', kind: (overview?.active_incidents ?? 0) ? 'down' : 'up' }} />
             </div>
 
-            <div className="work">
-              <div className="stage">
-                {mapCollapsed ? (
-                  // Карта по-настоящему свёрнута: Mapbox размонтирован (не рендерится
-                  // и не тратит ресурсы), вместо него — компактная плашка разворота.
-                  <div className="stage-collapsed">
-                    <IcoMap size={26} style={{ color: 'var(--ink-3)' }} />
-                    <p>Карта свёрнута</p>
-                    <button className="btn accent" onClick={() => setMapCollapsed(false)}>
-                      Показать карту
+            <div className={`work ${mapCollapsed ? 'no-map' : ''}`}>
+              {mapCollapsed ? (
+                // Карта размонтирована (Mapbox не рендерится): от неё остаётся
+                // только вертикальный корешок, правая колонка занимает всю ширину.
+                <button className="stage-stub" onClick={() => setMapCollapsed(false)}
+                  title="Развернуть карту области">
+                  <IcoMap size={16} />
+                  <span>Карта области · развернуть</span>
+                  <IcoChevron style={{ transform: 'rotate(-90deg)' }} />
+                </button>
+              ) : (
+                <div className="stage">
+                  <MapView schools={schools} mode={mapMode} selectedId={selectedId}
+                    onSelect={setSelectedId} onOpenSchool={openSchool} />
+
+                  <div className="float bl legend-card">
+                    <div className="eyebrow">Статус канала</div>
+                    {Object.entries(STATUS).map(([label, meta]) => (
+                      <div className="legend-row" key={label}>
+                        <span className="legend-dot" style={{ background: meta.color }} />
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="float bc">
+                    <button className="fab" disabled={!selected}
+                      onClick={() => selected && openSchool(selected.id)}>
+                      <IcoSchool size={16} />
+                      {selected ? `Карточка: ${selected.name.slice(0, 34)}` : 'Выберите школу на карте'}
                     </button>
                   </div>
-                ) : (
-                  <>
-                    <MapView schools={schools} mode={mapMode} selectedId={selectedId}
-                      onSelect={setSelectedId} onOpenSchool={openSchool} />
-
-                    <div className="float bl legend-card">
-                      <div className="eyebrow">Статус канала</div>
-                      {Object.entries(STATUS).map(([label, meta]) => (
-                        <div className="legend-row" key={label}>
-                          <span className="legend-dot" style={{ background: meta.color }} />
-                          {label}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="float bc">
-                      <button className="fab" disabled={!selected}
-                        onClick={() => selected && openSchool(selected.id)}>
-                        <IcoSchool size={16} />
-                        {selected ? `Карточка: ${selected.name.slice(0, 34)}` : 'Выберите школу на карте'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+                </div>
+              )}
 
               <Rail overview={overview} incidents={incidents} schools={schools}
                 onOpenSchool={openSchool} onOpenDevice={setDeviceDrawer} onReload={loadCore} />

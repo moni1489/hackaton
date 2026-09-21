@@ -68,7 +68,7 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
           <div className="metric-row">
             <Metric label="Загрузка" value={device.current_download ?? 0} unit=" Мбит/с"
               sub={`договор школы ${school.contract_speed_down} Мбит/с`}
-              color={(device.current_download ?? 0) < school.contract_speed_down * 0.6 ? '#E0453E' : '#17A65B'} />
+              color={(device.current_download ?? 0) < school.contract_speed_down * 0.6 ? '#B32318' : '#157347'} />
             <Metric label="Отдача" value={device.current_upload ?? 0} unit=" Мбит/с"
               sub={device.link_mode} />
             <Metric label="Задержка" value={device.current_ping ?? 0} unit=" мс"
@@ -86,7 +86,7 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
                   офлайн-замеров: {summary.offline_samples}
                 </span>
               </div>
-              <Bar value={device.availability_pct ?? 100} color="#2F6BF6" />
+              <Bar value={device.availability_pct ?? 100} color="#1B5AA8" />
             </div>
             <div className="block">
               <div className="eyebrow" style={{ marginBottom: 10 }}>Соответствие SLA на этом ПК</div>
@@ -97,7 +97,7 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
                 </span>
               </div>
               <Bar value={device.sla_compliance_pct ?? 100}
-                color={(device.sla_compliance_pct ?? 100) >= 95 ? '#17A65B' : '#E4962A'} />
+                color={(device.sla_compliance_pct ?? 100) >= 95 ? '#157347' : '#A9690B'} />
             </div>
           </div>
 
