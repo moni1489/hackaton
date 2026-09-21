@@ -8,6 +8,32 @@ import streamlit as st
 
 st.set_page_config(page_title="Качество связи", page_icon="📡", layout="wide")
 
+# палитра и шрифты — из frontend/src/index.css
+C = dict(accent="#2F6BF6", ok="#17A65B", warn="#E4962A", danger="#E0453E", violet="#7C5CF0",
+         ink="#0E1420", ink2="#46506A", ink3="#8B95AB", line="#E6E9EF")
+st.markdown(f"""<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+html, body, [class*="css"], .stApp {{ font-family: 'Manrope', sans-serif; }}
+[data-testid="stHeader"] {{ background: transparent; }}
+[data-testid="stSidebar"] {{ background: #fff; border-right: 1px solid {C['line']}; }}
+[data-testid="stVerticalBlockBorderWrapper"] {{
+  background: #fff; border: 1px solid {C['line']} !important; border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.06); }}
+[data-testid="stVegaLiteChart"], [data-testid="stArrowVegaLiteChart"] {{ background: #fff; }}
+.eyebrow {{ font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:{C['ink3']}; }}
+.mono {{ font-family:'JetBrains Mono', monospace; font-feature-settings:'tnum'; }}
+.big {{ font-size:4rem; font-weight:800; letter-spacing:-.03em; line-height:1.1; margin:6px 0 0; }}
+.tag {{ display:inline-block; font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:999px; }}
+.tag.ok {{ background:#E7F7EE; color:{C['ok']}; }} .tag.warn {{ background:#FDF3E2; color:{C['warn']}; }}
+.tag.danger {{ background:#FCEBEA; color:{C['danger']}; }}
+table.risk {{ width:100%; border-collapse:collapse; font-size:13px; }}
+table.risk th {{ text-align:left; font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
+  color:{C['ink3']}; padding:6px 8px; border-bottom:1px solid {C['line']}; }}
+table.risk td {{ padding:10px 8px; border-bottom:1px solid {C['line']}; color:{C['ink2']}; }}
+table.risk td:first-child {{ color:{C['ink']}; font-weight:700; }}
+h2, h3 {{ letter-spacing:-.02em; font-weight:800; }}
+</style>""", unsafe_allow_html=True)
+
 DB = Path(__file__).resolve().parent.parent.parent / "backend" / "hackathon.db"
 # пороги SLA — зеркало backend/app/config.py (SLA_*)
 SPEED_RATIO, PING_MS, LOSS_PCT = 0.6, 80.0, 2.0
@@ -80,9 +106,10 @@ def chart(series: pd.Series, title: str, color: str, rule: float | None = None):
     layers = base.mark_line(color=color, point=alt.OverlayMarkDef(color=color, size=12))
     if rule is not None:
         layers += alt.Chart(pd.DataFrame({"y": [rule]})).mark_rule(
-            color="#ef4444", strokeDash=[6, 4]).encode(y="y:Q")
-    st.altair_chart(layers.properties(height=230, title=alt.TitleParams(title, anchor="middle")),
-                    use_container_width=True)
+            color=C["danger"], strokeDash=[6, 4]).encode(y="y:Q")
+    with st.container(border=True):
+        st.altair_chart(layers.properties(height=230, title=alt.TitleParams(title, anchor="start", color=C["ink"], fontSize=14, font="Manrope")).configure_axis(gridColor=C["line"], labelColor=C["ink3"], domainColor=C["line"]),
+                        use_container_width=True)
 
 
 if not DB.exists():
@@ -108,23 +135,24 @@ if df.empty:
 
 sla_pct = round(100 - df["violation_pct"].mean())
 band, note = next((b, n) for lo, b, n in BANDS if sla_pct >= lo)
+tone = "ok" if sla_pct >= 85 else "warn" if sla_pct >= 70 else "danger"
 
 left, right = st.columns([3, 2])
 
 with left:
-    chart(df["download"], "Средняя скорость загрузки, Мбит/с", "#f5c542")
-    chart(df["ping"], "Пинг, мс (красная линия — порог SLA)", "#8b5cf6", PING_MS)
-    chart(df["loss"], "Потери пакетов, % (красная линия — порог SLA)", "#38bdf8", LOSS_PCT)
+    chart(df["download"], "Средняя скорость загрузки, Мбит/с", C["accent"])
+    chart(df["ping"], "Пинг, мс (красная линия — порог SLA)", C["violet"], PING_MS)
+    chart(df["loss"], "Потери пакетов, % (красная линия — порог SLA)", C["ok"], LOSS_PCT)
 
 with right:
     with st.container(border=True):
-        st.caption("Состояние связи")
-        st.markdown(f"<h1 style='text-align:center;margin:0;font-size:4rem'>{sla_pct}%</h1>"
-                    f"<h2 style='text-align:center;margin:0'>{band}</h2>", unsafe_allow_html=True)
+        st.markdown('<div class="eyebrow">Состояние связи</div>', unsafe_allow_html=True)
+        st.markdown(f"<div class='big mono' style='color:{C[tone]}'>{sla_pct}%</div>"
+                    f"<span class='tag {tone}'>{band}</span>", unsafe_allow_html=True)
         st.caption(f"{note} Показатель — доля замеров в рамках SLA за период.")
 
     with st.container(border=True):
-        st.subheader("Быстрая проверка SLA")
+        st.markdown('<div class="eyebrow">Быстрая проверка SLA</div>', unsafe_allow_html=True)
         checks = [  # (метрика, пик/худшее значение, порог, превышен ли, подпись порога)
             ("Пинг", df["ping"].max(), PING_MS, df["ping"].max() > PING_MS, f"{PING_MS:g} мс", "макс."),
             ("Потери пакетов", df["loss"].max(), LOSS_PCT, df["loss"].max() > LOSS_PCT, f"{LOSS_PCT:g} %", "макс."),
@@ -132,10 +160,12 @@ with right:
              df["speed_pct"].min() < SPEED_RATIO * 100, f"{SPEED_RATIO * 100:.0f} %", "мин."),
             ("Замеры вне SLA", df["violation_pct"].max(), 15, df["violation_pct"].max() > 15, "15 %", "макс."),
         ]
-        rows = [{"Метрика": n, "Худший час": f"{v:.1f} ({k})", "Порог SLA": t,
-                 "Статус": "🔴 Превышено" if bad else "🟢 В норме"}
-                for n, v, _, bad, t, k in checks]
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        tr = "".join(
+            f"<tr><td>{n}</td><td class='mono'>{v:.1f} ({k})</td><td class='mono'>{t}</td>"
+            f"<td><span class='tag {'danger' if bad else 'ok'}'>{'Превышено' if bad else 'В норме'}</span></td></tr>"
+            for n, v, _, bad, t, k in checks)
+        st.markdown("<table class='risk'><tr><th>Метрика</th><th>Худший час</th><th>Порог SLA</th>"
+                    f"<th>Статус</th></tr>{tr}</table>", unsafe_allow_html=True)
         st.markdown("**Выявленные проблемы:**")
         issues = [f"{n}: {v:.1f} — порог {t}" for n, v, _, bad, t, _ in checks if bad]
         offline = int(df["offline"].sum())
@@ -146,7 +176,7 @@ with right:
 
     if school_id is None:
         with st.container(border=True):
-            st.subheader("Проблемные школы")
+            st.markdown('<div class="eyebrow">Проблемные школы</div>', unsafe_allow_html=True)
             st.dataframe(worst_schools(region_f, since), hide_index=True, use_container_width=True)
 
 st.caption("Источник: backend/hackathon.db. Графики — среднее по выбранным школам за час; "
