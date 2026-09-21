@@ -109,9 +109,11 @@ async def unhandled(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Внутренняя ошибка сервера"})
 
 
-app.include_router(auth.router)
-if not (settings.DEMO_MODE and settings.DEMO_PUBLIC):
+if settings.DEMO_MODE and settings.DEMO_PUBLIC:
     # Публичный показ: наружу — только вход оператора и демо-API, без административных и рабочих API.
+    app.include_router(auth.public_router)
+else:
+    app.include_router(auth.router)
     app.include_router(agent.router)
     app.include_router(web.router)
     app.include_router(export.router)

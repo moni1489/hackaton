@@ -1,7 +1,7 @@
 /* Дашборд зрителя демонстрации: только чтение.
    Маршрут /live/{session_id}#t=<временный токен>. Состояние приходит с сервера целиком
    (SSE; при недоступности потока — опрос каждые 1,5 с), клиент ничего не считает и не запускает.
-   /live/replay — резервное воспроизведение записи того же сценария без сервера и интернета. */
+   /live/replay и /#replay — резервное воспроизведение записи того же сценария без сервера и интернета. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API_URL } from './api';
 import { statusMeta } from './ui';
@@ -179,7 +179,7 @@ function useNow(active) {   // «сейчас» для обратного отс
 const CONN_LABEL = {
   connecting: ['off', 'Подключение…'],
   live: ['ok', 'Онлайн · синхронно'],
-  polling: ['warn', 'Резервный режим: обновление каждые 1,5 с'],
+  polling: ['warn', 'Резервный режим · опрос'],
   offline: ['danger', 'Нет связи · переподключаемся'],
   replay: ['warn', 'Запись · без сервера'],
 };
@@ -663,7 +663,8 @@ function Replay() {
 }
 
 export default function Live() {
-  const sid = decodeURIComponent(window.location.pathname.split('/')[2] || '');
+  const sid = window.location.hash === '#replay' ? 'replay'
+    : decodeURIComponent(window.location.pathname.split('/')[2] || '');
   useEffect(() => { document.title = 'Демонстрация · САМ ВКО'; }, []);
   return sid === 'replay' ? <Replay /> : <Viewer sid={sid} />;
 }

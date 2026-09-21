@@ -22,10 +22,10 @@
 }
 .lv-banner b { font-size: 13px; letter-spacing: .06em; }
 
-.lv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 16px 8px; max-width: 1200px; margin: 0 auto; }
+.lv-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 16px 16px 8px; max-width: 1200px; margin: 0 auto; }
 .lv-head h1 { font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
 
-.lv-pill { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 999px; background: var(--off-soft); color: var(--off); white-space: nowrap; }
+.lv-pill { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 999px; background: var(--off-soft); color: var(--off); }
 .lv-pill i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .lv-pill.ok { background: var(--ok-soft); color: var(--ok); }
 .lv-pill.warn { background: var(--warn-soft); color: #9A5B00; }

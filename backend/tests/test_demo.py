@@ -763,7 +763,7 @@ def _probe(**env) -> dict:
     """Поднимает приложение с заданным окружением и возвращает коды ответов на набор путей."""
     code = ("import json;from fastapi.testclient import TestClient;from app.main import app\n"
             "c=TestClient(app);paths=['/api/demo/config','/api/web/overview','/api/admin/users','/api/ml/board',"
-            "'/api/ai/status','/api/agent/register','/api/public-data/schools','/docs','/openapi.json','/api/auth/policy']\n"
+            "'/api/ai/status','/api/agent/register','/api/public-data/schools','/docs','/openapi.json','/api/auth/policy','/api/auth/audit']\n"
             "print(json.dumps({'codes':{p:c.get(p).status_code for p in paths},'root':c.get('/').json()}))")
     full = {**os.environ, "DEMO_MODE": "false", "DEMO_PUBLIC": "false", **env}
     out = subprocess.run([sys.executable, "-c", code], cwd=BACKEND, env=full, capture_output=True,
@@ -778,6 +778,7 @@ class Wiring(unittest.TestCase):
         self.assertEqual(got["codes"]["/api/demo/config"], 404, "демо видно в обычном режиме")
         self.assertEqual(got["codes"]["/api/web/overview"], 401)      # обычные API на месте
         self.assertEqual(got["codes"]["/docs"], 200)
+        self.assertEqual(got["codes"]["/api/auth/policy"], 200)
 
     def test_demo_mode_adds_routes_and_keeps_the_rest(self):
         got = _probe(DEMO_MODE="true")
@@ -787,7 +788,8 @@ class Wiring(unittest.TestCase):
     def test_public_mode_has_no_admin_or_work_apis(self):
         got = _probe(DEMO_MODE="true", DEMO_PUBLIC="true")
         self.assertEqual(got["codes"]["/api/demo/config"], 200)
-        self.assertEqual(got["codes"]["/api/auth/policy"], 200)      # вход оператора остаётся
+        self.assertEqual(got["codes"]["/api/auth/policy"], 404)      # журнал аудита и политики — тоже не наружу
+        self.assertEqual(got["codes"]["/api/auth/audit"], 404)
         for path in ("/api/web/overview", "/api/admin/users", "/api/ml/board", "/api/ai/status",
                      "/api/agent/register", "/api/public-data/schools", "/docs", "/openapi.json"):
             self.assertEqual(got["codes"][path], 404, path)

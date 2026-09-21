@@ -210,15 +210,36 @@ class Browsers(unittest.TestCase):
         self.assertLess(time.time() - started, 8)
         self.assertGreaterEqual(page.locator("text=ВОСПРОИЗВЕДЕНИЕ ЗАПИСИ").count(), 1)
         seen = []
-        for _ in range(12):
-            seen.append(page.locator(".lv-stage h2").inner_text())
+        for _ in range(13):
+            stage = page.locator(".lv-stage h2").inner_text()
+            seen.append(stage)
+            if stage == "Обращение и акт SLA":
+                self.assertGreaterEqual(page.locator("a:text('Скачать PDF-акт SLA')").count(), 1)
             page.keyboard.press("ArrowRight")
         self.assertIn("Вывод модели", seen)
         self.assertIn("Решение оператора", seen)
-        self.assertGreaterEqual(page.locator("text=Скачать PDF-акт SLA").count(), 1)
+        self.assertIn("Обращение и акт SLA", seen)
         self.assertLessEqual(overflow(page), 0)
         self.assertEqual(external, [])                                # страницы демо не ходят наружу
         ctx.close()
+
+    def test_replay_opens_from_plain_static_server_without_our_backend(self):
+        port = _free_port()
+        static = subprocess.Popen([sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1",
+                                   "--directory", str(DIST)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            time.sleep(1)
+            ctx = BROWSER.new_context(viewport={"width": 390, "height": 844}, is_mobile=True)
+            page = ctx.new_page()
+            page.goto(f"http://127.0.0.1:{port}/#replay")
+            page.wait_for_selector("text=ВОСПРОИЗВЕДЕНИЕ ЗАПИСИ", timeout=8000)
+            for _ in range(8):
+                page.keyboard.press("ArrowRight")
+            self.assertEqual(page.locator(".lv-stage h2").inner_text(), "Вывод модели")
+            self.assertGreaterEqual(page.locator(f"text={BANNER}").count(), 1)
+            ctx.close()
+        finally:
+            static.terminate()
 
     def test_expired_link_shows_generic_message(self):
         ctx = BROWSER.new_context()

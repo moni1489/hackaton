@@ -78,3 +78,10 @@ def policy():
         "data_minimization": "персональные данные учащихся не собираются; "
                              "хранятся только сетевые метрики и служебные контакты",
     }
+
+
+# Публичный демо-режим (DEMO_PUBLIC): наружу — только вход и профиль, без журнала аудита и политик.
+public_router = APIRouter(prefix="/api/auth", tags=["Auth API"])
+public_router.add_api_route("/login", login, methods=["POST"], response_model=TokenResponse,
+                            summary="Вход в веб-панель")
+public_router.add_api_route("/me", me, methods=["GET"], summary="Текущий профиль и область видимости")
