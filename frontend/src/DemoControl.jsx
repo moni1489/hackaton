@@ -1,8 +1,9 @@
-/* Панель ведущего демонстрации. Маршрут /demo. Доступ — только operator/admin.
+/* Вкладка «Демонстрация» в панели оператора: одна кнопка запуска, ссылка с QR-кодом для зала
+   и управление сценарием. Доступ — только operator/admin (вкладка скрыта у остальных ролей).
    Все действия идут через API и попадают в журнал аудита; зрители получают изменение с сервера. */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, api, clearSession, getToken, getUser, request } from './api';
-import { LiveView } from './Live';
+import { ApiError, request } from './api';
+import { LiveView } from './MlDash';
 import './demo.css';
 
 const INTERVAL_STAGES = [
@@ -30,81 +31,37 @@ async function saveBlob(response, filename) {
 
 const call = (path, method = 'GET', body) => request(`/api/demo${path}`, { method, body });
 
-function OperatorLogin({ onDone }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const submit = async (event) => {
-    event.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      await api.login(email.trim(), password);
-      onDone();
-    } catch (e) { setError(e.status === 401 ? 'Неверный логин или пароль' : e.message); } finally { setBusy(false); }
-  };
-  // Намеренно без подсказок с учётными записями: страница доступна всему залу.
-  return (
-    <form className="dc-card dc-login" onSubmit={submit}>
-      <h2>Панель ведущего</h2>
-      <p className="dc-note">Вход только для ролей operator и admin.</p>
-      {error ? <div className="dc-err">{error}</div> : null}
-      <label className="dc-field">Электронная почта
-        <input type="email" value={email} autoComplete="username" onChange={(e) => setEmail(e.target.value)} required />
-      </label>
-      <label className="dc-field">Пароль
-        <input type="password" value={password} autoComplete="current-password"
-          onChange={(e) => setPassword(e.target.value)} required />
-      </label>
-      <button type="submit" className="btn accent" disabled={busy}>{busy ? 'Проверка…' : 'Войти'}</button>
-    </form>
-  );
-}
-
 function Setup({ onCreated, onOpen, sessions, fail }) {
-  const [title, setTitle] = useState('Демонстрация САМ ВКО');
-  const [mode, setMode] = useState('manual');
-  const [publicUrl, setPublicUrl] = useState(window.location.origin);
   const [busy, setBusy] = useState(false);
   const create = async () => {
     setBusy(true);
-    try { onCreated(await call('/sessions', 'POST', { title, mode, public_url: publicUrl })); } catch (e) { fail(e); } finally { setBusy(false); }
+    try {
+      onCreated(await call('/sessions', 'POST',
+        { title: 'Демонстрация САМ ВКО', mode: 'manual', public_url: window.location.origin }));
+    } catch (e) { fail(e); } finally { setBusy(false); }
   };
   return (
-    <div className="dc-cols">
-      <section className="dc-card">
-        <h2>Новая демонстрационная сессия</h2>
-        <label className="dc-field">Название
-          <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} />
-        </label>
-        <label className="dc-field">Режим переходов
-          <select value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="manual">Ручной: этапы переключает ведущий</option>
-            <option value="auto">Автоматический: по таймеру (интервалы — в панели сессии)</option>
-          </select>
-        </label>
-        <label className="dc-field">Адрес для зрителей (попадёт в QR-код)
-          <input value={publicUrl} onChange={(e) => setPublicUrl(e.target.value)} placeholder="http://192.168.1.20:8000" />
-        </label>
-        {isLocal(window.location.hostname) && isLocal(hostOf(publicUrl)) ? (
-          <div className="dc-warn">Телефоны не откроют «localhost». Укажите адрес компьютера в сети зала
-            (его печатает <code>python demo.py up</code>) или публичный адрес туннеля.</div>
-        ) : null}
+    <>
+      <section className="dc-card dc-start">
+        <h2>Демонстрация для зала</h2>
+        <p className="dc-note">Одна кнопка: сервер посчитает модели, выдаст ссылку и QR-код.
+          На телефонах зрителей откроется ML-дашборд в реальном времени — тот же, что в предпросмотре ниже.</p>
         <button type="button" className="btn accent" onClick={create} disabled={busy}>
-          {busy ? 'Создаём (считаем модели один раз)…' : 'Создать сессию'}
+          {busy ? 'Готовим (считаем модели)…' : '▶ Запустить демо'}
         </button>
       </section>
-      <section className="dc-card">
-        <h2>Активные сессии</h2>
-        {sessions.length === 0 ? <p className="dc-note">Активных сессий нет.</p> : sessions.map((s) => (
-          <div key={s.id} className="dc-row">
-            <span className="dc-note" style={{ flex: 1 }}><b>{s.title}</b> · этап {s.stage} · запуск №{s.run}</span>
-            <button type="button" className="btn" onClick={() => onOpen(s.id)}>Открыть</button>
-          </div>
-        ))}
-      </section>
-    </div>
+      {sessions.length ? (
+        <section className="dc-card dc-start">
+          <h2>Активные сессии</h2>
+          {sessions.map((s) => (
+            <div key={s.id} className="dc-row">
+              <span className="dc-note" style={{ flex: 1 }}><b>{s.title}</b> · этап {s.stage} · запуск №{s.run}</span>
+              <button type="button" className="btn" onClick={() => onOpen(s.id)}>Открыть</button>
+            </div>
+          ))}
+        </section>
+      ) : null}
+    </>
   );
 }
 
@@ -126,7 +83,7 @@ function Controls({ sid, state, act, setError }) {
   return (
     <div className="dc-cols" style={{ gridTemplateColumns: 'minmax(0,1fr)' }}>
       <section className="dc-card">
-        <h2>Сценарий <span className="lv-tag">{view.stage.label}{control.paused ? ' · пауза' : ''}</span></h2>
+        <h2>Сценарий <span className="tag info">{view.stage.label}{control.paused ? ' · пауза' : ''}</span></h2>
         <div className="dc-row">
           <button type="button" className="btn accent" disabled={!control.can.start}
             onClick={() => act(() => call(`/sessions/${sid}/control`, 'POST', { action: 'start' }))}>▶ Запуск</button>
@@ -266,18 +223,18 @@ function LinkPanel({ sid, link, setLink, control, fail }) {
   );
 }
 
-function Panel({ initial, onLogout }) {
-  const [sid, setSid] = useState(initial?.session_id || null);
-  const [state, setState] = useState(initial?.state || null);
-  const [link, setLink] = useState(initial?.link || null);
+function Panel() {
+  const [sid, setSid] = useState(null);
+  const [state, setState] = useState(null);
+  const [link, setLink] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [error, setError] = useState('');
   const timer = useRef(null);
 
   const fail = useCallback((e) => {
-    if (e instanceof ApiError && e.status === 401) onLogout();
-    else setError(e.message || 'Ошибка запроса');
-  }, [onLogout]);
+    // 401 разбирает сам api.js: он шлёт vko:unauthorized и приложение возвращает на вход.
+    if (!(e instanceof ApiError && e.status === 401)) setError(e.message || 'Ошибка запроса');
+  }, []);
 
   const refreshList = useCallback(() => call('/sessions').then(setSessions).catch(fail), [fail]);
   useEffect(() => { if (!sid) refreshList(); }, [sid, refreshList]);
@@ -309,17 +266,14 @@ function Panel({ initial, onLogout }) {
   };
 
   return (
-    <div className="dc">
-      <header className="dc-top">
-        <h1>Панель ведущего · демонстрация</h1>
+    <div className="page dc-page">
+      {sid ? (
         <div className="dc-row">
-          {sid ? <button type="button" className="btn danger" onClick={close}>Закрыть сессию</button> : null}
-          {sid ? <button type="button" className="btn" onClick={() => { setSid(null); setState(null); }}>К списку сессий</button> : null}
-          <button type="button" className="btn" onClick={onLogout}>Выйти</button>
+          <button type="button" className="btn danger" onClick={close}>Закрыть сессию</button>
+          <button type="button" className="btn" onClick={() => { setSid(null); setState(null); }}>К списку сессий</button>
         </div>
-      </header>
-      <div className="dc-wrap">
-        {error ? <div className="dc-err" role="alert">{error}</div> : null}
+      ) : null}
+      {error ? <div className="dc-err" role="alert">{error}</div> : null}
         {!sid ? (
           <Setup sessions={sessions} fail={fail} onOpen={open}
             onCreated={(data) => { setLink(data.link); setState(data.state); setSid(data.session_id); }} />
@@ -330,48 +284,35 @@ function Panel({ initial, onLogout }) {
               <LinkPanel sid={sid} link={link} setLink={setLink} control={state.control} fail={fail} />
             </div>
             <section aria-label="Предварительный просмотр">
-              <h2 style={{ margin: '0 0 8px' }}>Предварительный просмотр: то, что видят зрители</h2>
+              <h2 style={{ margin: '0 0 8px' }}>Предпросмотр: ML-дашборд на телефонах зрителей</h2>
               <div className="dc-preview"><LiveView view={state.view} conn="live" /></div>
             </section>
           </div>
         )}
-      </div>
     </div>
   );
 }
 
-export default function DemoControl() {
-  const [authed, setAuthed] = useState(Boolean(getToken()));
+export default function DemoPanel({ role }) {
   const [enabled, setEnabled] = useState(null);
-  useEffect(() => { document.title = 'Панель ведущего · САМ ВКО'; }, []);
-  useEffect(() => {
-    request('/api/demo/config').then(() => setEnabled(true)).catch(() => setEnabled(false));
-    const drop = () => setAuthed(false);
-    window.addEventListener('vko:unauthorized', drop);
-    return () => window.removeEventListener('vko:unauthorized', drop);
-  }, []);
+  useEffect(() => { request('/api/demo/config').then(() => setEnabled(true)).catch(() => setEnabled(false)); }, []);
 
-  const role = getUser()?.role;
-  const logout = () => { clearSession(); setAuthed(false); };
-
-  if (enabled === null) return null;
+  if (enabled === null) return <div className="page dc-page"><p className="dc-note">Загрузка…</p></div>;
   if (!enabled) {
     return (
-      <div className="dc"><div className="dc-wrap"><section className="dc-card dc-login">
+      <div className="page dc-page"><section className="dc-card dc-start">
         <h2>Демонстрационный режим отключён</h2>
         <p className="dc-note">На сервере не включён DEMO_MODE.</p>
-      </section></div></div>
+      </section></div>
     );
   }
-  if (!authed) return <div className="dc"><div className="dc-wrap"><OperatorLogin onDone={() => setAuthed(true)} /></div></div>;
   if (role !== 'operator' && role !== 'admin') {
     return (
-      <div className="dc"><div className="dc-wrap"><section className="dc-card dc-login">
+      <div className="page dc-page"><section className="dc-card dc-start">
         <h2>Доступ запрещён</h2>
-        <p className="dc-note">Панель доступна только ролям operator и admin.</p>
-        <button type="button" className="btn" onClick={logout}>Выйти</button>
-      </section></div></div>
+        <p className="dc-note">Демонстрацию запускают только роли operator и admin.</p>
+      </section></div>
     );
   }
-  return <Panel onLogout={logout} />;
+  return <Panel />;
 }
