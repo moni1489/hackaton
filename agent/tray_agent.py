@@ -567,12 +567,11 @@ class StatusWindow(tk.Toplevel):
 
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=(16, 0))
-        ttk.Button(btn_frame, text="Панель",
-                   command=lambda: webbrowser.open("http://localhost:5173")).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Акт SLA (PDF)",
-                   command=open_report).pack(side="left", padx=4)
+        panel_url = os.environ.get("VKO_FRONTEND", "https://hackaton-eta-seven.vercel.app")
+        ttk.Button(btn_frame, text="Открыть панель",
+                   command=lambda: webbrowser.open(panel_url)).pack(side="left", padx=4)
         ttk.Button(btn_frame, text="Скрыть",
-                   command=self.iconify).pack(side="left", padx=4)
+                   command=self.withdraw).pack(side="left", padx=4)
 
         self.deiconify()   # отображаем окно статуса при запуске
 
