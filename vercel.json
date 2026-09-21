@@ -1,5 +1,0 @@
-{
-  "installCommand": "cd frontend 2>/dev/null || true; npm install",
-  "buildCommand": "cd frontend 2>/dev/null || true; npm run build",
-  "outputDirectory": "frontend/dist"
-}
