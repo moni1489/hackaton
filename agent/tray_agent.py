@@ -78,6 +78,25 @@ logging.basicConfig(
     ],
 )
 
+# Заглушаем внутренние ошибки pystray (когда в Wayland/Sway нет X11 systray manager)
+for _logger_name in ("pystray", "pystray._base", "pystray._xorg"):
+    logging.getLogger(_logger_name).setLevel(logging.CRITICAL)
+
+
+def is_systray_supported() -> bool:
+    """Проверяет наличие активного менеджера системного трея."""
+    if platform.system() != "Linux":
+        return True
+    try:
+        import Xlib.display, Xlib.X
+        d = Xlib.display.Display()
+        atom = d.get_atom(f"_NET_SYSTEM_TRAY_S{d.get_default_screen()}")
+        owner = d.get_selection_owner(atom)
+        d.close()
+        return owner != Xlib.X.NONE
+    except Exception:
+        return False
+
 # ── Статус агента (shared state) ───────────────────────────────────────────────
 STATUS = {
     "text":     "Инициализация...",
@@ -611,11 +630,12 @@ class EnrollDialog(tk.Toplevel):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class StatusWindow(tk.Toplevel):
-    def __init__(self, master):
+    def __init__(self, master, has_tray_func=None):
         super().__init__(master)
+        self._has_tray_func = has_tray_func
         self.title("САМ ВКО — Статус агента")
         self.resizable(False, False)
-        self.protocol("WM_DELETE_WINDOW", self.withdraw)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         frame = ttk.Frame(self, padding=20)
         frame.pack(fill="both", expand=True)
@@ -642,14 +662,37 @@ class StatusWindow(tk.Toplevel):
             ttk.Label(row_f, textvariable=var, anchor="w",
                       font=("Segoe UI", 10, "bold")).pack(side="left")
 
+        panel_url = os.environ.get("VKO_FRONTEND", DEFAULT_DASHBOARD_URL)
+        def _open_panel():
+            if platform.system() == "Windows":
+                webbrowser.open(panel_url)
+            else:
+                try:
+                    subprocess.Popen(["xdg-open", panel_url])
+                except Exception:
+                    webbrowser.open(panel_url)
+
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(pady=(16, 0))
         ttk.Button(btn_frame, text="Открыть панель",
-                   command=lambda: webbrowser.open(DEFAULT_DASHBOARD_URL)).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Скрыть",
-                   command=self.withdraw).pack(side="left", padx=4)
+                   command=_open_panel).pack(side="left", padx=4)
 
-        self.withdraw()   # скрыто по умолчанию
+        has_tray = self._has_tray_func() if self._has_tray_func else False
+        close_text = "Скрыть" if has_tray else "Выход"
+        ttk.Button(btn_frame, text=close_text,
+                   command=self._on_close).pack(side="left", padx=4)
+
+        if has_tray:
+            self.withdraw()
+        else:
+            self.deiconify()
+
+    def _on_close(self):
+        has_tray = self._has_tray_func() if self._has_tray_func else False
+        if has_tray:
+            self.withdraw()
+        else:
+            self.master.destroy()
 
     def refresh(self, st: dict):
         unit = {"download": " Мбит/с", "upload": " Мбит/с",
@@ -676,7 +719,8 @@ class TrayApp:
 
         self._tray_icon: "pystray.Icon | None" = None
         self._agent_thread: threading.Thread | None = None
-        self._status_win = StatusWindow(self.root)
+        self._has_active_tray = False
+        self._status_win = StatusWindow(self.root, has_tray_func=lambda: self._has_active_tray)
 
         # Периодическая проверка очереди событий из фонового потока
         self.root.after(500, self._poll_ui_queue)
@@ -702,8 +746,12 @@ class TrayApp:
             log.warning("Pystray loop завершился или не поддерживается WM: %s", e)
 
     def _start_tray(self):
-        if not HAS_TRAY:
+        if not HAS_TRAY or not is_systray_supported():
+            log.info("Системный трей не обнаружен в оконном менеджере. Агент работает через окно статуса.")
+            self._has_active_tray = False
+            self.root.after(100, self._status_win.deiconify)
             return
+
         icon_img = make_icon("init")
         try:
             # На Linux X11/Xlib заголовок окна WM_NAME кодируется в latin-1,
@@ -712,11 +760,14 @@ class TrayApp:
             self._tray_icon = pystray.Icon(
                 "vko-agent", icon_img, tray_title, menu=self._build_tray_menu()
             )
+            self._has_active_tray = True
             t = threading.Thread(target=self._run_tray_safely, daemon=True)
             t.start()
         except Exception as exc:
             log.warning("Системный трей недоступен в этом окружении (%s). Окно статуса открыто.", exc)
             self._tray_icon = None
+            self._has_active_tray = False
+            self.root.after(100, self._status_win.deiconify)
 
     def _update_tray_icon(self, st: dict):
         if not self._tray_icon:
