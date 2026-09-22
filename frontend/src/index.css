@@ -186,6 +186,8 @@ a { color: inherit; text-decoration: none; }
   color: var(--ink-2); position: relative;
 }
 .icon-btn:hover { background: var(--surface-2); }
+.icon-btn.on { color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 0 14px var(--accent-soft); }
+.icon-btn:disabled { opacity: .4; }
 .icon-btn .pip {
   position: absolute; top: 9px; right: 10px; width: 7px; height: 7px;
   border-radius: 50%; background: var(--danger); border: 2px solid var(--surface);

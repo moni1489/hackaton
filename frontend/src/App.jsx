@@ -195,10 +195,10 @@ function Dashboard({ user, onLogout }) {
                     : `Замер ${fmtAge(fresh.age_min)} назад`}
             </span>
           </span>
-          <button className={`pill-toggle ${demo ? 'on' : ''}`} onClick={toggleDemo}
+          <button className={`icon-btn ${demo ? 'on' : ''}`} onClick={toggleDemo}
             disabled={!demo && !fresh?.last_measurement}
             title="Показать состояние на момент последнего замера в базе. Это не текущие данные.">
-            <IcoClock size={15} />Демо истории
+            <IcoClock size={17} />
           </button>
 
           <div className="search">
