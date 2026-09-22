@@ -108,7 +108,8 @@ version
 | `backend/app/services/demo/engine.py` | сессии, переходы и таймеры, токены зрителей, `Hub` (SSE), фоновый цикл, проверка публичного режима |
 | `backend/app/routers/demo.py` | REST для ведущего, зрительские `state`/`stream`/`report.pdf`, QR |
 | `backend/app/main.py` | подключение только при `DEMO_MODE`; публичный режим; раздача собранного фронтенда |
-| `frontend/src/Live.jsx`, `DemoControl.jsx`, `demo.css`, `demo-base.css` | экран зрителя (и запись `/live/replay`), панель ведущего |
+| `frontend/src/Live.jsx`, `MlDash.jsx`, `streamlit.css` | подключение зрителя (и запись `/live/replay`) и сам ML-дашборд |
+| `frontend/src/DemoControl.jsx`, `demo.css` | вкладка «Демонстрация» в панели оператора (кнопка запуска, QR, сценарий) |
 | `demo.py`, `backend/demo_load.py` | команды: установка, подготовка, запуск, проверка, тесты, нагрузка |
 | `backend/tests/test_demo.py`, `test_demo_ui.py` | тесты (API/синхронизация/Redis/безопасность; реальные браузеры) |
 

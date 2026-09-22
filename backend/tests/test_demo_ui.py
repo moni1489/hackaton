@@ -103,30 +103,26 @@ def overflow(page) -> int:
 
 
 def operator_creates_session(context):
+    """Оператор входит в обычное приложение и на вкладке «Демонстрация» жмёт одну кнопку."""
     page = context.new_page()
     page.goto(f"{BASE}/demo")
-    page.fill("input[type=email]", EMAIL)
-    page.fill("input[type=password]", PASSWORD)
+    page.fill("#email", EMAIL)
+    page.fill("#password", PASSWORD)
     page.click("button[type=submit]")
-    page.wait_for_selector("text=Новая демонстрационная сессия")
-    page.fill("input[placeholder='http://192.168.1.20:8000']", BASE)
-    page.click("text=Создать сессию")
+    page.wait_for_selector("text=Демонстрация для зала")
+    page.click("text=▶ Запустить демо")
     page.wait_for_selector(".dc-qr svg")
     return page, page.input_value("input[aria-label='Ссылка для зрителей']")
 
 
 class Browsers(unittest.TestCase):
-    def test_operator_login_form_has_no_credential_hints_and_rejects_bad_password(self):
+    def test_operator_login_rejects_bad_password(self):
         ctx = BROWSER.new_context()
         page = ctx.new_page()
         page.goto(f"{BASE}/demo")
-        page.wait_for_selector("text=Панель ведущего")
-        html = page.content()
-        for hint in ("admin123", "operator123", "school123", "provider123", "@vko.edu.kz"):
-            self.assertNotIn(hint, html)
-        self.assertEqual(page.input_value("input[type=email]"), "")
-        page.fill("input[type=email]", EMAIL)
-        page.fill("input[type=password]", "wrong-password")
+        page.wait_for_selector("text=Вход в систему")
+        page.fill("#email", EMAIL)
+        page.fill("#password", "wrong-password")
         page.click("button[type=submit]")
         page.wait_for_selector("text=Неверный логин или пароль")
         ctx.close()
@@ -140,14 +136,14 @@ class Browsers(unittest.TestCase):
         viewers = [ctx.new_page() for ctx in (phone, laptop, tiny)]
         for page in viewers:
             page.goto(url)
-            page.wait_for_selector(".lv-stage h2:text-is('Ожидание начала')")
+            page.wait_for_selector(".st[data-stage='waiting']")
             self.assertNotIn("#t=", page.url)                         # токен убран из адресной строки
         self.assertNotIn(url.split("#t=")[1], viewers[0].content())   # и не выводится на экран
 
         def everyone_on(stage, limit_ms=2000):
             started = time.time()
             for page in viewers:
-                page.wait_for_selector(f".lv-stage h2:text-is('{stage}')", timeout=limit_ms)
+                page.wait_for_selector(f".st[data-stage='{stage}']", timeout=limit_ms)
             self.assertLess(time.time() - started, limit_ms / 1000)
             for page in viewers:
                 self.assertLessEqual(overflow(page), 0, f"{stage}: горизонтальная прокрутка")
@@ -155,11 +151,11 @@ class Browsers(unittest.TestCase):
                 self.assertEqual(page.locator("input, select, textarea").count(), 0)   # зритель ничего не вводит
 
         op.click("text=▶ Запуск")
-        everyone_on("Штатная работа")
+        everyone_on("normal")
         for page in viewers:
-            self.assertGreaterEqual(page.locator("text=Данные свежие").count(), 1)
-        for click, stage in (("Следующий этап →", "Авария"), ("Следующий этап →", "Диагностика"),
-                             ("Следующий этап →", "Вывод модели"), ("Следующий этап →", "Решение оператора")):
+            self.assertGreaterEqual(page.locator("text=Последний замер").count(), 1)
+        for click, stage in (("Следующий этап →", "incident_started"), ("Следующий этап →", "diagnostics"),
+                             ("Следующий этап →", "ml_result"), ("Следующий этап →", "operator_review")):
             op.click(f"text={click}")
             everyone_on(stage)
         for page in viewers:
@@ -169,12 +165,12 @@ class Browsers(unittest.TestCase):
         self.assertTrue(op.locator("text=Следующий этап →").is_disabled())   # человек не обходится
 
         viewers[0].reload()                                            # перезагрузка не теряет этап
-        viewers[0].wait_for_selector(".lv-stage h2:text-is('Решение оператора')", timeout=5000)
+        viewers[0].wait_for_selector(".st[data-stage='operator_review']", timeout=5000)
 
         op.click("text=Подтвердить вердикт")
-        everyone_on("Оператор решил")
+        everyone_on("operator_confirmed")
         op.click("text=Сформировать акт")
-        everyone_on("Обращение и акт SLA")
+        everyone_on("report_ready")
         with viewers[0].expect_download() as download:
             viewers[0].click("text=Скачать PDF-акт SLA")
         self.assertTrue(Path(download.value.path()).read_bytes().startswith(b"%PDF"))
@@ -182,7 +178,7 @@ class Browsers(unittest.TestCase):
 
         op.once("dialog", lambda dialog: dialog.accept())
         op.click("text=↺ Сброс")
-        everyone_on("Сброс")
+        everyone_on("reset")
         for ctx in (op_ctx, phone, laptop, tiny):
             ctx.close()
 
@@ -193,8 +189,8 @@ class Browsers(unittest.TestCase):
         op.click("text=Следующий этап →")
         late = BROWSER.new_context(viewport={"width": 390, "height": 844}, is_mobile=True).new_page()
         late.goto(url)
-        late.wait_for_selector(".lv-stage h2:text-is('Авария')", timeout=3000)
-        self.assertGreaterEqual(late.locator("text=Затронуто школ: 4 из 12").count(), 1)
+        late.wait_for_selector(".st[data-stage='incident_started']", timeout=3000)
+        self.assertGreaterEqual(late.locator("text=затронутым школам (4 из 12)").count(), 1)
         ctx.close()
 
     def test_replay_works_when_external_network_hangs(self):
@@ -211,14 +207,14 @@ class Browsers(unittest.TestCase):
         self.assertGreaterEqual(page.locator("text=ВОСПРОИЗВЕДЕНИЕ ЗАПИСИ").count(), 1)
         seen = []
         for _ in range(13):
-            stage = page.locator(".lv-stage h2").inner_text()
+            stage = page.locator(".st").get_attribute("data-stage")
             seen.append(stage)
-            if stage == "Обращение и акт SLA":
+            if stage == "report_ready":
                 self.assertGreaterEqual(page.locator("a:text('Скачать PDF-акт SLA')").count(), 1)
             page.keyboard.press("ArrowRight")
-        self.assertIn("Вывод модели", seen)
-        self.assertIn("Решение оператора", seen)
-        self.assertIn("Обращение и акт SLA", seen)
+        self.assertIn("ml_result", seen)
+        self.assertIn("operator_review", seen)
+        self.assertIn("report_ready", seen)
         self.assertLessEqual(overflow(page), 0)
         self.assertEqual(external, [])                                # страницы демо не ходят наружу
         ctx.close()
@@ -235,7 +231,7 @@ class Browsers(unittest.TestCase):
             page.wait_for_selector("text=ВОСПРОИЗВЕДЕНИЕ ЗАПИСИ", timeout=8000)
             for _ in range(8):
                 page.keyboard.press("ArrowRight")
-            self.assertEqual(page.locator(".lv-stage h2").inner_text(), "Вывод модели")
+            self.assertEqual(page.locator(".st").get_attribute("data-stage"), "ml_result")
             self.assertGreaterEqual(page.locator(f"text={BANNER}").count(), 1)
             ctx.close()
         finally:

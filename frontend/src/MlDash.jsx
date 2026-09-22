@@ -26,11 +26,11 @@ function useNow(active) {
   return now;
 }
 
-function Metric({ label, value, unit, delta, kind = 'off' }) {
+function Metric({ label, value, unit, delta, kind = 'off', text = false }) {
   return (
     <div className="st-metric">
       <div className="lbl">{label}</div>
-      <div className="val">{value}{unit ? <small>{unit}</small> : null}</div>
+      <div className={`val ${text ? 'text' : ''}`}>{value}{unit ? <small>{unit}</small> : null}</div>
       <div className={`dlt ${kind}`}>{delta || ' '}</div>
     </div>
   );
@@ -127,7 +127,7 @@ function Diagnostics({ steps }) {
     <>
       <div className="st-progress"><i style={{ width: `${(done / steps.length) * 100}%` }} /></div>
       <p className="st-caption">Сбор признаков для модели: {done} из {steps.length}</p>
-      <table className="st-table">
+      <div className="st-scroll"><table className="st-table">
         <tbody>
           {steps.map((s) => (
             <tr key={s.key}>
@@ -137,7 +137,7 @@ function Diagnostics({ steps }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </>
   );
 }
@@ -151,9 +151,9 @@ function Attribution({ ml }) {
       <div className="st-metrics">
         <Metric label="Уверенность модели" value={pct(ml.confidence)}
           delta={`потолок при таких данных ${pct(ml.confidence_cap)}`} />
-        <Metric label="Достаточность данных" value={ml.data_quality.label}
+        <Metric label="Достаточность данных" value={ml.data_quality.label} text
           delta={`сопоставимых школ: ${ml.data_quality.comparable_peers}`} />
-        <Metric label="Зона ответственности" value={ml.responsible} delta={`версия ${ml.model_version}`} />
+        <Metric label="Зона ответственности" value={ml.responsible} text delta={`версия ${ml.model_version}`} />
       </div>
 
       <h3>Вероятности классов</h3>
@@ -210,7 +210,7 @@ function Forecast({ forecast }) {
       <div className="st-metrics">
         <Metric label={`Риск нарушения SLA за ${forecast.horizon_hours} ч`} value={pct(p)}
           delta={forecast.band} kind={p >= 0.45 ? 'down' : 'up'} />
-        <Metric label="Версия модели прогноза" value={forecast.model_version} />
+        <Metric label="Версия модели прогноза" value={forecast.model_version} text />
       </div>
       <div className="st-progress"><i style={{ width: pct(p) }} /></div>
       <p className="st-caption">{forecast.recommendation}</p>
@@ -234,7 +234,7 @@ export function LiveView({ view, conn, offset = 0, pdf = null }) {
   const waiting = stage.key === 'waiting' || stage.key === 'reset';
 
   return (
-    <div className="st">
+    <div className="st" data-stage={stage.key}>
       <div className="st-top">Демонстрационные синтетические данные · вымышленные школы и провайдеры ·
         модели не подтверждены на реальных авариях</div>
       <div className="st-main">

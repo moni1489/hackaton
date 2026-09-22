@@ -32,8 +32,9 @@
 .st-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; }
 .st-metric { border: 1px solid var(--st-line); border-radius: .5rem; padding: 1rem; background: var(--st-bg); }
 .st-metric .lbl { font-size: .875rem; color: var(--st-ink-2); }
-.st-metric .val { font-size: 2rem; font-weight: 400; line-height: 1.2; font-family: var(--st-mono); }
+.st-metric .val { font-size: 2rem; font-weight: 400; line-height: 1.2; font-family: var(--st-mono); overflow-wrap: break-word; }
 .st-metric .val small { font-size: 1rem; color: var(--st-ink-2); font-family: inherit; margin-left: .25rem; }
+.st-metric .val.text { font-size: 1.125rem; line-height: 1.35; font-family: inherit; }
 .st-metric .dlt { font-size: .875rem; }
 .st-metric .dlt.up { color: var(--st-green); }
 .st-metric .dlt.down { color: var(--st-red); }
@@ -76,7 +77,8 @@
 /* --- st.dataframe -------------------------------------------------------------------- */
 .st-table { width: 100%; border-collapse: collapse; font-size: .875rem; border: 1px solid var(--st-grid); border-radius: .25rem; overflow: hidden; }
 .st-table th { background: var(--st-bg-2); text-align: left; font-weight: 600; }
-.st-table th, .st-table td { padding: .4rem .6rem; border-bottom: 1px solid var(--st-grid); white-space: nowrap; }
+.st-table th, .st-table td { padding: .4rem .6rem; border-bottom: 1px solid var(--st-grid); }
+.st-table th, .st-table td.num { white-space: nowrap; }
 .st-table tr:last-child td { border-bottom: 0; }
 .st-table td.num { font-family: var(--st-mono); text-align: right; }
 .st-scroll { overflow-x: auto; }
@@ -112,6 +114,13 @@
 .st-spin { width: 1.1rem; height: 1.1rem; border-radius: 50%; border: 3px solid var(--st-bg-2);
   border-top-color: var(--st-primary); animation: st-rot 1s linear infinite; flex: 0 0 auto; }
 @keyframes st-rot { to { transform: rotate(360deg); } }
+
+/* узкий экран телефона: значения метрик не должны вылезать за плитку */
+@container (max-width: 480px) {
+  .st-metric .val { font-size: 1.5rem; }
+  .st h1 { font-size: 1.75rem; }
+  .st h2 { font-size: 1.25rem; }
+}
 
 .st-cols { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
 @container (min-width: 720px) { .st-cols.two { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }

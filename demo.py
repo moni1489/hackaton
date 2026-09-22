@@ -409,8 +409,9 @@ def cmd_test(args) -> None:
         return
     say("Тесты backend: демонстрация и существующие тесты проекта")
     run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"], cwd=BACKEND, env=env)
-    say("\nFrontend: линт и сборка")
+    say("\nFrontend: линт, рендер ML-дашборда на записи сценария и сборка")
     run([npm(), "run", "lint"], cwd=FRONTEND, check=False)
+    run(["node", "check-mldash.mjs"], cwd=FRONTEND)
     build_frontend()
 
 

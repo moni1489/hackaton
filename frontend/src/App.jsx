@@ -208,7 +208,7 @@ function Dashboard({ user, onLogout }) {
           {['admin', 'operator'].includes(user?.role) ? (
             <button className="btn accent" style={{ flex: 'none' }} onClick={() => setView('demo')}
               title="Создать сессию, показать QR-код залу и вести сценарий">
-              ▶ Запустить демо
+              ▶ Демо для зала
             </button>
           ) : null}
 

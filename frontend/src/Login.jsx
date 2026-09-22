@@ -24,7 +24,7 @@ export default function Login({ onSuccess }) {
       await api.login(creds?.email ?? email, creds?.password ?? password);
       onSuccess();
     } catch (e) {
-      setError(e.message);
+      setError(e.status === 401 ? 'Неверный логин или пароль' : e.message);
       setBusy(false);
     }
   };

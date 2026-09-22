@@ -95,6 +95,19 @@ FEATURE_LABELS = {
     "n_dev": "Число ПК с данными",
     "peer_ctx": "Число соседей для сравнения",
 }
+FORECAST_LABELS = {
+    "compliance_6h": "Соответствие SLA за 6 ч",
+    "compliance_24h": "Соответствие SLA за 24 ч",
+    "depth_now": "Текущая глубина просадки",
+    "anom_frac_now": "Доля ПК школы в аномалии сейчас",
+    "trend_1h_6h": "Тренд скорости: 1 ч против 6 ч",
+    "is_weekend": "Выходной день",
+    "peer_anom_frac": "Доля соседних школ провайдера в аномалии",
+    "loss_6h": "Потери пакетов за 6 ч",
+    "grade": "Средняя скорость за 24 ч к тарифу",
+    "hour_sin": "Час суток",
+    "hour_cos": "Час суток",
+}
 NOTICE = ("Демонстрационные синтетические данные. Модели обучены на симуляторе отказов и не "
           "подтверждены на реальных авариях школ. Вывод — гипотеза; решение принимает оператор.")
 
@@ -337,7 +350,9 @@ def _compute(seed: int) -> dict:
                 "probability": prediction["probability"], "band": prediction["band"],
                 "horizon_hours": prediction["horizon_hours"],
                 "recommendation": prediction["recommendation"],
-                "drivers": prediction["drivers"], "model_version": prediction["model_version"]},
+                "drivers": [{**d, "label": FORECAST_LABELS.get(d["feature"], d["feature"])}
+                            for d in prediction["drivers"]],
+                "model_version": prediction["model_version"]},
             "notice": NOTICE,
         }
 
