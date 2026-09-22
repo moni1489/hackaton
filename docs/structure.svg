@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="1060" viewBox="0 0 1560 1060" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+<style>.ct{font-size:19px;font-weight:700}.sec{font-size:11px;font-weight:700;fill:#8A94A6;letter-spacing:.08em;text-transform:uppercase}.f{font-size:13.5px;font-weight:600;fill:#1F2733}.d{font-size:12px;fill:#7A8494}.h{font-size:28px;font-weight:800;fill:#111A26}.sub{font-size:14px;fill:#7A8494}.ar{font-size:12px;font-weight:600;fill:#5B6675}</style>
+<rect width="1560" height="1060" fill="#F6F7F9"/>
+<text x="48" y="54" class="h">САМ ВКО — структура проекта</text>
+<text x="48" y="80" class="sub">мониторинг интернета в школах: зонды → FastAPI → React-дашборд</text>
+<rect x="48" y="110" width="430" height="440" rx="14" fill="#fff" stroke="#DDE2EA"/>
+<rect x="48" y="110" width="430" height="4" rx="2" fill="#2F6BF6"/>
+<text x="64" y="142" class="ct" fill="#2F6BF6">frontend/  :5173</text>
+<text x="68" y="180" class="f">frontend/</text>
+<text x="462" y="180" class="d" text-anchor="end">React 19 + Vite, собирается в nginx-образ</text>
+<text x="64" y="208" class="sec">src/ — экраны</text>
+<text x="68" y="234" class="f">App.jsx</text>
+<text x="462" y="234" class="d" text-anchor="end">каркас, роутинг, загрузка данных</text>
+<text x="68" y="254" class="f">MapView.jsx</text>
+<text x="462" y="254" class="d" text-anchor="end">карта школ (MapLibre)</text>
+<text x="68" y="274" class="f">Diagnostics.jsx</text>
+<text x="462" y="274" class="d" text-anchor="end">ML-диагностика причин</text>
+<text x="68" y="294" class="f">SchoolDrawer.jsx</text>
+<text x="462" y="294" class="d" text-anchor="end">карточка школы</text>
+<text x="68" y="314" class="f">DeviceDrawer.jsx</text>
+<text x="462" y="314" class="d" text-anchor="end">карточка устройства</text>
+<text x="68" y="334" class="f">Pages.jsx</text>
+<text x="462" y="334" class="d" text-anchor="end">реестры, настройки, отчёты</text>
+<text x="68" y="354" class="f">Rating.jsx</text>
+<text x="462" y="354" class="d" text-anchor="end">рейтинг организаций</text>
+<text x="68" y="374" class="f">PublicData.jsx</text>
+<text x="462" y="374" class="d" text-anchor="end">внешние источники</text>
+<text x="68" y="394" class="f">Rail.jsx</text>
+<text x="462" y="394" class="d" text-anchor="end">боковая сводка и инциденты</text>
+<text x="68" y="414" class="f">Login.jsx</text>
+<text x="462" y="414" class="d" text-anchor="end">вход по ролям</text>
+<text x="64" y="442" class="sec">src/ — общее</text>
+<text x="68" y="468" class="f">api.js</text>
+<text x="462" y="468" class="d" text-anchor="end">HTTP-клиент, JWT</text>
+<text x="68" y="488" class="f">ui.jsx</text>
+<text x="462" y="488" class="d" text-anchor="end">статусы, теги, форматтеры</text>
+<text x="68" y="508" class="f">Charts.jsx</text>
+<text x="462" y="508" class="d" text-anchor="end">спарклайны и графики</text>
+<text x="68" y="528" class="f">icons.jsx / index.css</text>
+<text x="462" y="528" class="d" text-anchor="end">иконки, тема</text>
+<rect x="538" y="110" width="540" height="688" rx="14" fill="#fff" stroke="#DDE2EA"/>
+<rect x="538" y="110" width="540" height="4" rx="2" fill="#D9730D"/>
+<text x="554" y="142" class="ct" fill="#D9730D">backend/  :8000</text>
+<text x="558" y="180" class="f">backend/</text>
+<text x="1062" y="180" class="d" text-anchor="end">FastAPI + SQLAlchemy, порт 8000</text>
+<text x="554" y="208" class="sec">app/routers/ — API</text>
+<text x="558" y="234" class="f">web.py</text>
+<text x="1062" y="234" class="d" text-anchor="end">данные для дашборда</text>
+<text x="558" y="254" class="f">agent.py</text>
+<text x="1062" y="254" class="d" text-anchor="end">приём замеров от зондов</text>
+<text x="558" y="274" class="f">ml.py</text>
+<text x="1062" y="274" class="d" text-anchor="end">диагностика и прогноз</text>
+<text x="558" y="294" class="f">admin.py</text>
+<text x="1062" y="294" class="d" text-anchor="end">реестры и настройки</text>
+<text x="558" y="314" class="f">auth.py</text>
+<text x="1062" y="314" class="d" text-anchor="end">вход, JWT, роли</text>
+<text x="558" y="334" class="f">public_data.py</text>
+<text x="1062" y="334" class="d" text-anchor="end">внешние открытые данные</text>
+<text x="558" y="354" class="f">export.py</text>
+<text x="1062" y="354" class="d" text-anchor="end">выгрузки и отчёты</text>
+<text x="558" y="374" class="f">ai.py</text>
+<text x="1062" y="374" class="d" text-anchor="end">текстовые сводки (GenAI)</text>
+<text x="554" y="402" class="sec">app/services/ — логика</text>
+<text x="558" y="428" class="f">status.py</text>
+<text x="1062" y="428" class="d" text-anchor="end">статусы школ по порогам</text>
+<text x="558" y="448" class="f">lines.py</text>
+<text x="1062" y="448" class="d" text-anchor="end">основные линии связи</text>
+<text x="558" y="468" class="f">ml/</text>
+<text x="1062" y="468" class="d" text-anchor="end">атрибуция причин + прогноз</text>
+<text x="558" y="488" class="f">predictive.py</text>
+<text x="1062" y="488" class="d" text-anchor="end">риск деградации</text>
+<text x="558" y="508" class="f">rating.py</text>
+<text x="1062" y="508" class="d" text-anchor="end">рейтинг организаций</text>
+<text x="558" y="528" class="f">public_data.py / external_network.py</text>
+<text x="1062" y="528" class="d" text-anchor="end">сбор внешних данных</text>
+<text x="558" y="548" class="f">reports.py / retention.py</text>
+<text x="1062" y="548" class="d" text-anchor="end">отчёты, чистка истории</text>
+<text x="558" y="568" class="f">smart_sync.py / celery_app.py</text>
+<text x="1062" y="568" class="d" text-anchor="end">фоновые задачи</text>
+<text x="554" y="596" class="sec">app/ — ядро</text>
+<text x="558" y="622" class="f">models.py / schemas.py</text>
+<text x="1062" y="622" class="d" text-anchor="end">таблицы и контракты</text>
+<text x="558" y="642" class="f">database.py / cache.py</text>
+<text x="1062" y="642" class="d" text-anchor="end">сессии БД, кеш</text>
+<text x="558" y="662" class="f">security.py / config.py</text>
+<text x="1062" y="662" class="d" text-anchor="end">пароли, токены, настройки</text>
+<text x="554" y="690" class="sec">данные</text>
+<text x="558" y="716" class="f">hackathon.db</text>
+<text x="1062" y="716" class="d" text-anchor="end">SQLite (том db:/app/dbdata)</text>
+<text x="558" y="736" class="f">models/*.json</text>
+<text x="1062" y="736" class="d" text-anchor="end">обученные модели и отчёт</text>
+<text x="558" y="756" class="f">bootstrap.py / seed_vko_data.py</text>
+<text x="1062" y="756" class="d" text-anchor="end">первичное наполнение</text>
+<text x="558" y="776" class="f">tests/</text>
+<text x="1062" y="776" class="d" text-anchor="end">pytest</text>
+<rect x="1138" y="110" width="374" height="148" rx="14" fill="#fff" stroke="#DDE2EA"/>
+<rect x="1138" y="110" width="374" height="4" rx="2" fill="#1F9D55"/>
+<text x="1154" y="142" class="ct" fill="#1F9D55">agent/</text>
+<text x="1158" y="180" class="f">agent/</text>
+<text x="1496" y="180" class="d" text-anchor="end">зонд в школе</text>
+<text x="1158" y="208" class="f">agent.py</text>
+<text x="1496" y="208" class="d" text-anchor="end">замер скорости и потерь → /agent</text>
+<text x="1158" y="236" class="f">requirements.txt</text>
+<text x="1496" y="236" class="d" text-anchor="end">зависимости зонда</text>
+<rect x="1138" y="282" width="374" height="148" rx="14" fill="#fff" stroke="#DDE2EA"/>
+<rect x="1138" y="282" width="374" height="4" rx="2" fill="#7A4FD6"/>
+<text x="1154" y="314" class="ct" fill="#7A4FD6">streamlit_app/</text>
+<text x="1158" y="352" class="f">streamlit_app/</text>
+<text x="1496" y="352" class="d" text-anchor="end">аналитический дашборд</text>
+<text x="1158" y="380" class="f">app.py</text>
+<text x="1496" y="380" class="d" text-anchor="end">точка входа Streamlit</text>
+<text x="1158" y="408" class="f">pages/network_dashboard.py</text>
+<text x="1496" y="408" class="d" text-anchor="end">разбор сети</text>
+<rect x="1138" y="454" width="374" height="176" rx="14" fill="#fff" stroke="#DDE2EA"/>
+<rect x="1138" y="454" width="374" height="4" rx="2" fill="#5B6675"/>
+<text x="1154" y="486" class="ct" fill="#5B6675">docs/</text>
+<text x="1158" y="524" class="f">docs/ и корень</text>
+<text x="1496" y="524" class="d" text-anchor="end">документация</text>
+<text x="1158" y="552" class="f">docker-compose.yml</text>
+<text x="1496" y="552" class="d" text-anchor="end">backend + frontend, том db</text>
+<text x="1158" y="580" class="f">docs/SAM_VKO_vision_and_data.md</text>
+<text x="1496" y="580" class="d" text-anchor="end">архитектура</text>
+<text x="1158" y="608" class="f">README.md / DATA_TASKS.md</text>
+<text x="1496" y="608" class="d" text-anchor="end">запуск, данные</text>
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 z" fill="#9AA5B5"/></marker></defs>
+<line x1="478" y1="300" x2="536" y2="300" stroke="#9AA5B5" stroke-width="2" marker-end="url(#a)"/>
+<text x="507.0" y="292" class="ar" text-anchor="middle">REST + JWT</text>
+<line x1="1136" y1="190" x2="1080" y2="190" stroke="#9AA5B5" stroke-width="2" marker-end="url(#a)"/>
+<text x="1108.0" y="182" class="ar" text-anchor="middle">замеры</text>
+</svg>
