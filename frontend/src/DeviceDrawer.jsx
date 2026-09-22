@@ -42,7 +42,7 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
     );
   }
 
-  const { device, school, measurements, summary, analytics, sync_batches: batches } = data;
+  const { device = {}, school = {}, measurements = [], summary = {}, analytics = {}, sync_batches: batches = [] } = (data || {});
   const meta = deviceMeta(device.status);
   const canManage = role === 'admin' || role === 'operator';
 
@@ -67,14 +67,14 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
         <div className="drawer-body">
           <div className="metric-row">
             <Metric label="Загрузка" value={device.current_download ?? 0} unit=" Мбит/с"
-              sub={`договор школы ${school.contract_speed_down} Мбит/с`}
-              color={(device.current_download ?? 0) < school.contract_speed_down * 0.6 ? '#E0453E' : '#17A65B'} />
+              sub={`договор школы ${school.contract_speed_down || 0} Мбит/с`}
+              color={(device.current_download ?? 0) < (school.contract_speed_down || 0) * 0.6 ? '#E0453E' : '#17A65B'} />
             <Metric label="Отдача" value={device.current_upload ?? 0} unit=" Мбит/с"
               sub={device.link_mode} />
             <Metric label="Задержка" value={device.current_ping ?? 0} unit=" мс"
               sub={`джиттер ${device.current_jitter ?? 0} мс`} />
             <Metric label="Потери" value={device.current_packet_loss ?? 0} unit=" %"
-              sub={`замеров: ${summary.samples}`} />
+              sub={`замеров: ${summary?.samples ?? 0}`} />
           </div>
 
           <div className="pair-grid">
@@ -83,7 +83,7 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 9 }}>
                 <b className="mono" style={{ fontSize: 24 }}>{device.availability_pct ?? 100}%</b>
                 <span style={{ fontSize: 11.5, color: 'var(--ink-3)', fontWeight: 600 }}>
-                  офлайн-замеров: {summary.offline_samples}
+                  офлайн-замеров: {summary?.offline_samples ?? 0}
                 </span>
               </div>
               <Bar value={device.availability_pct ?? 100} color="#2F6BF6" />
@@ -111,15 +111,15 @@ export default function DeviceDrawer({ deviceId, role, onClose }) {
           <div className="block"><LossChart measurements={measurements} /></div>
 
           <Section title="Анализ канала этого ПК">
-            <Tag kind={RISK_CLASS[analytics.risk_level] || 'off'}>
-              {analytics.samples ? `риск ${analytics.risk_score}/100 · ${analytics.risk_level}` : 'нет данных'}
+            <Tag kind={RISK_CLASS[analytics?.risk_level] || 'off'}>
+              {analytics?.samples ? `риск ${analytics.risk_score}/100 · ${analytics.risk_level}` : 'нет данных'}
             </Tag>
           </Section>
           <div className="block">
             <p style={{ margin: '0 0 12px', fontSize: 13, lineHeight: 1.55 }}>
-              {analytics.samples ? analytics.forecast : 'Нет замеров за период — анализ не выполняется.'}
+              {analytics?.samples ? analytics.forecast : 'Нет замеров за период — анализ не выполняется.'}
             </p>
-            {analytics.patterns.length ? analytics.patterns.map((pattern) => (
+            {analytics?.patterns?.length ? analytics.patterns.map((pattern) => (
               <div key={pattern.type + pattern.key} style={{
                 display: 'flex', gap: 10, alignItems: 'center', padding: '9px 0',
                 borderTop: '1px solid var(--surface-3)',

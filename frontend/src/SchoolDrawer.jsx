@@ -86,6 +86,27 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
   const ratio = school.contract_speed_down
     ? Math.round(100 * (school.current_download || 0) / school.contract_speed_down) : 0;
 
+  const devices = Array.isArray(school.devices) ? school.devices : [];
+  const incidents = Array.isArray(school.incidents) ? school.incidents : [];
+  const lines = Array.isArray(school.lines) && school.lines.length ? school.lines : [
+    {
+      id: 'main-line',
+      role: 'main',
+      code: school.school_id_code || 'MAIN',
+      provider: school.provider || '—',
+      connection_type: school.connection_type || '—',
+      contract_speed_down: school.contract_speed_down || 0,
+      contract_speed_up: school.contract_speed_up || 0,
+      status: school.status || 'unknown',
+    }
+  ];
+  const workstations = school.workstations || {
+    total: devices.length,
+    with_fresh_data: devices.filter((d) => d.status !== 'offline' && !d.is_stale).length,
+    degraded: devices.filter((d) => d.status === 'warning').length,
+    offline: devices.filter((d) => d.status === 'offline').length,
+  };
+
   /* --- окно претензии ---------------------------------------------- */
   if (claim) {
     return (
@@ -185,12 +206,12 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
             <Metric label="Задержка" value={live ? school.current_ping : '—'} unit={live ? ' мс' : ''}
               sub={live ? `джиттер ${school.current_jitter} мс` : 'нет свежего замера'} />
             <Metric label="Потери пакетов" value={live ? school.current_packet_loss : '—'} unit={live ? ' %' : ''}
-              sub={`ПК-агентов: ${school.devices.length}`} />
+              sub={`ПК-агентов: ${devices.length}`} />
           </div>
 
           <Section title="Линии связи и рабочие места" />
           <div className="block">
-            {school.lines.map((line) => (
+            {lines.map((line) => (
               <div key={line.id} style={{
                 display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0',
                 borderTop: '1px solid var(--surface-3)',
@@ -204,9 +225,9 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
               </div>
             ))}
             <p className="insight-note" style={{ marginBottom: 0 }}>
-              Статус школы определяет основная линия. Рабочих мест: {school.workstations.total}
-              , со свежими данными {school.workstations.with_fresh_data}, с отклонениями{' '}
-              {school.workstations.degraded}, не в сети {school.workstations.offline}. Они оцениваются
+              Статус школы определяет основная линия. Рабочих мест: {workstations.total}
+              , со свежими данными {workstations.with_fresh_data}, с отклонениями{' '}
+              {workstations.degraded}, не в сети {workstations.offline}. Они оцениваются
               отдельно и на статус школы не влияют.
             </p>
           </div>
@@ -264,23 +285,23 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                   <div className="mini-stat">
                     <div className="k">ПК в отклонении</div>
                     <div className="v">
-                      {verdict.evidence.devices_affected}/{verdict.evidence.devices_total}
+                      {verdict.evidence?.devices_affected ?? 0}/{verdict.evidence?.devices_total ?? 0}
                     </div>
                   </div>
                   <div className="mini-stat">
                     <div className="k">Сопоставимые школы провайдера</div>
                     <div className="v">
-                      {verdict.evidence.peers_same_provider_district_affected}/
-                      {verdict.evidence.peers_same_provider_district}
+                      {verdict.evidence?.peers_same_provider_district_affected ?? 0}/
+                      {verdict.evidence?.peers_same_provider_district ?? 0}
                     </div>
                   </div>
                   <div className="mini-stat">
                     <div className="k">Просадка к норме</div>
-                    <div className="v">{verdict.evidence.avg_depth_pct}%</div>
+                    <div className="v">{verdict.evidence?.avg_depth_pct ?? 0}%</div>
                   </div>
                   <div className="mini-stat">
                     <div className="k">Модель</div>
-                    <div className="v" style={{ fontSize: 12 }}>{verdict.model_version}</div>
+                    <div className="v" style={{ fontSize: 12 }}>{verdict.model_version || '—'}</div>
                   </div>
                 </div>
                 {prediction && prediction.probability != null ? (
@@ -368,7 +389,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                       color={analytics.availability_ok ? '#17A65B' : '#E0453E'} />
                   </div>
                 </div>
-                {analytics.patterns.length ? (
+                {analytics.patterns?.length ? (
                   <div style={{ marginTop: 14 }}>
                     <div className="eyebrow" style={{ marginBottom: 6 }}>Повторяющиеся паттерны деградации</div>
                     {analytics.patterns.map((pattern) => (
@@ -389,7 +410,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
             </>
           ) : null}
 
-          <Section title={`ПК-агенты (${school.devices.length})`}>
+          <Section title={`ПК-агенты (${devices.length})`}>
             <Tag kind="info">нажмите строку для ПК-уровня</Tag>
           </Section>
           <div className="page-card">
@@ -401,7 +422,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                 </tr>
               </thead>
               <tbody>
-                {school.devices.map((device) => {
+                {devices.map((device) => {
                   const dm = deviceMeta(device.status);
                   return (
                     <tr key={device.device_id} onClick={() => onOpenDevice(device.device_id)}>
@@ -444,8 +465,8 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
             </div>
           </div>
 
-          <Section title={`Инциденты (${school.incidents.length})`} />
-          {school.incidents.length ? school.incidents.map((incident) => (
+          <Section title={`Инциденты (${incidents.length})`} />
+          {incidents.length ? incidents.map((incident) => (
             <div className="block" key={incident.id}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
                 <span className="mono" style={{ fontSize: 12, fontWeight: 700 }}>
