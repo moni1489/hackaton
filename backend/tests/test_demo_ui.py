@@ -150,26 +150,26 @@ class Browsers(unittest.TestCase):
                 self.assertGreaterEqual(page.locator(f"text={BANNER}").count(), 1, f"{stage}: нет маркировки")
                 self.assertEqual(page.locator("input, select, textarea").count(), 0)   # зритель ничего не вводит
 
-        op.click("text=▶ Запуск")
+        # Управление идёт полосой поверх обычных экранов: демонстрация проходит в самом приложении.
+        op.click(".demo-bar >> text=▶ Запуск")
         everyone_on("normal")
         for page in viewers:
             self.assertGreaterEqual(page.locator("text=Последний замер").count(), 1)
-        for click, stage in (("Следующий этап →", "incident_started"), ("Следующий этап →", "diagnostics"),
-                             ("Следующий этап →", "ml_result"), ("Следующий этап →", "operator_review")):
-            op.click(f"text={click}")
+        for stage in ("incident_started", "diagnostics", "ml_result", "operator_review"):
+            op.click(".demo-bar >> text=Следующий шаг →")
             everyone_on(stage)
         for page in viewers:
             self.assertGreaterEqual(page.locator("text=Ожидает решения оператора").count(), 1)
             self.assertGreaterEqual(page.locator("text=Узел провайдера в районе").count(), 1)
             self.assertEqual(page.locator("button").count(), 0)        # до акта у зрителя нет ни одной кнопки
-        self.assertTrue(op.locator("text=Следующий этап →").is_disabled())   # человек не обходится
+        self.assertTrue(op.locator(".demo-bar >> text=Следующий шаг →").is_disabled())  # человек не обходится
 
         viewers[0].reload()                                            # перезагрузка не теряет этап
         viewers[0].wait_for_selector(".st[data-stage='operator_review']", timeout=5000)
 
-        op.click("text=Подтвердить вердикт")
+        op.click(".demo-bar >> text=Подтвердить вердикт")
         everyone_on("operator_confirmed")
-        op.click("text=Сформировать акт")
+        op.click(".demo-bar >> text=Сформировать акт")
         everyone_on("report_ready")
         with viewers[0].expect_download() as download:
             viewers[0].click("text=Скачать PDF-акт SLA")
@@ -177,7 +177,7 @@ class Browsers(unittest.TestCase):
         self.assertEqual(viewers[0].locator("button").count(), 1)      # единственная кнопка зрителя — скачать акт
 
         op.once("dialog", lambda dialog: dialog.accept())
-        op.click("text=↺ Сброс")
+        op.click(".demo-bar >> text=↺ Сброс")
         everyone_on("reset")
         for ctx in (op_ctx, phone, laptop, tiny):
             ctx.close()
@@ -185,8 +185,8 @@ class Browsers(unittest.TestCase):
     def test_late_joiner_sees_current_stage_at_once(self):
         ctx = BROWSER.new_context(viewport={"width": 1280, "height": 900})
         op, url = operator_creates_session(ctx)
-        op.click("text=▶ Запуск")
-        op.click("text=Следующий этап →")
+        op.click(".demo-bar >> text=▶ Запуск")
+        op.click(".demo-bar >> text=Следующий шаг →")
         late = BROWSER.new_context(viewport={"width": 390, "height": 844}, is_mobile=True).new_page()
         late.goto(url)
         late.wait_for_selector(".st[data-stage='incident_started']", timeout=3000)

@@ -549,7 +549,16 @@ table.grid code { font-family: var(--mono); font-size: 11.5px; background: var(-
 .form-grid .wide { grid-column: 1 / -1; }
 .check-row { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 
-/* Полоса управления демонстрацией: видна на любом экране, пока идёт сессия. */
-.demo-bar { flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--line); }
-.demo-bar .btn { flex: none; padding: 7px 12px; }
+/* Полоса управления демонстрацией: закреплена внизу экрана и лежит выше карточки школы
+   (z-index 50), иначе открытая карточка перекрывала бы органы управления показом. */
+.demo-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  flex-wrap: wrap; gap: 8px; padding: 10px 16px; min-height: 56px;
+  border-top: 1px solid var(--accent); box-shadow: 0 -6px 20px rgba(16, 24, 40, .12);
+}
+.demo-bar .btn { flex: none; padding: 7px 12px; background: #fff; }
 .demo-bar > span { flex: 1 1 260px; }
+/* Пока полоса на экране, ничего не должно под неё уезжать: карточка школы заканчивается
+   над полосой, у прокручиваемых областей — запас снизу. */
+.demo-on .overlay { bottom: 56px; }
+.demo-on .page, .demo-on .rail-body { padding-bottom: 64px; }

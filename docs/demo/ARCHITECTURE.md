@@ -109,7 +109,8 @@ version
 | `backend/app/routers/demo.py` | REST для ведущего, зрительские `state`/`stream`/`report.pdf`, QR |
 | `backend/app/main.py` | подключение только при `DEMO_MODE`; публичный режим; раздача собранного фронтенда |
 | `frontend/src/Live.jsx`, `MlDash.jsx`, `streamlit.css` | подключение зрителя (и запись `/live/replay`) и сам ML-дашборд |
-| `frontend/src/DemoControl.jsx`, `demo.css` | вкладка «Демонстрация» в панели оператора (кнопка запуска, QR, сценарий) |
+| `frontend/src/DemoControl.jsx`, `demo.css` | вкладка «Демонстрация», полоса управления показом, состояние сессии (`useDemoSession`) |
+| `frontend/src/demoData.js` | сценарий в форме боевого API: во время показа карта, карточка школы, диагностика и инциденты читают его, а не БД (подмена — в `api.js`) |
 | `demo.py`, `backend/demo_load.py` | команды: установка, подготовка, запуск, проверка, тесты, нагрузка |
 | `backend/tests/test_demo.py`, `test_demo_ui.py` | тесты (API/синхронизация/Redis/безопасность; реальные браузеры) |
 

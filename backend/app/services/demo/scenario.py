@@ -115,6 +115,13 @@ ML_RUNS = 0                 # сколько раз реально считал�
 _LOCK = threading.RLock()
 
 
+def _brief(model) -> dict:
+    """Сводные метрики модели без разбивки по классам: названия причин — это вердикт."""
+    if model is None:
+        return {}
+    return {k: model.metrics.get(k) for k in ("samples", "accuracy", "macro_f1", "train_samples")}
+
+
 def _device_id(code: str, n: int | None) -> str:
     return f"DEMO-{code}-GW" if n is None else f"DEMO-{code}-PC{n}"
 
@@ -356,6 +363,33 @@ def _compute(seed: int) -> dict:
             "notice": NOTICE,
         }
 
+        # Версии и метрики моделей: в публичном показе /api/ml/* закрыт, а карточка «Модели»
+        # на экране диагностики должна быть заполнена теми же числами, что и в обычной работе.
+        attr_model, fcst_model = attribution.model(), forecast.model()
+        models = {
+            "baseline": {"devices": len(fx.store["profiles"]), "buckets_per_device": 48,
+                         "built_at": NOW_INCIDENT.isoformat(timespec="seconds"),
+                         "z_threshold": -3.0, "ready": True},
+            "attribution": {
+                "trained": bool(attr_model),
+                "version": attr_model.version if attr_model else None,
+                # Только число классов: названия причин — это и есть вердикт, а он не должен
+                # попасть зрителям до этапа «Вывод модели».
+                "classes_count": len(attr_model.classes if attr_model else CAUSE_LABELS),
+                "features": attr_model.features if attr_model else [],
+                # Только сводные числа: разбивка по классам называет причины до вердикта.
+                "metrics": _brief(attr_model)},
+            "forecast": {
+                "trained": bool(fcst_model),
+                "version": fcst_model.version if fcst_model else None,
+                "horizon_hours": prediction.get("horizon_hours", 6),
+                "features": fcst_model.features if fcst_model else [],
+                "metrics": {**_brief(fcst_model), "per_class": {"breach": {
+                    "recall": (fcst_model.metrics.get("per_class") or {}).get("breach", {}).get("recall")}}}
+                if fcst_model else {}},
+            "runtime": "чистый Python, без внешних ML-зависимостей",
+        }
+
         # --- ряд для графика: среднее по группе «провайдер узла» и по остальным ---------
         group = [c for c, d, p, *_ in SCHOOLS if (p, d) == FAILED]
         rest = [c for c, d, p, *_ in SCHOOLS if (p, d) != FAILED]
@@ -394,6 +428,7 @@ def _compute(seed: int) -> dict:
         affected = [s["id"] for s in schools if s["affected"]]
         return {
             "seed": seed, "synthetic": True, "schools": schools, "series": series, "ml": ml,
+            "models": models,
             "steps": _steps(verdict), "report": report_ctx,
             "incident": {"number": "INC-DEMO-0001", "provider": FAILED[0], "district": FAILED[1],
                          "started": ONSET.strftime("%H:%M"), "affected": affected},
@@ -495,7 +530,7 @@ def build_view(doc: dict) -> dict:
                   "note": "модельное время сценария"},
         "freshness": {**scn["fresh"][moment], "state": "fresh" if not scn["fresh"][moment]["is_stale"] else "stale"}
         if started else None,
-        "schools": schools, "metrics": metrics,
+        "schools": schools, "metrics": metrics, "models": scn["models"],
         "series": [p for p in scn["series"] if incident or p["t"] <= scn["clock"]["normal"]] if started else [],
         "provider": {"name": scn["incident"]["provider"], "district": scn["incident"]["district"],
                      "affected": len(scn["incident"]["affected"]),

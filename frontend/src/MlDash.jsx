@@ -147,6 +147,7 @@ function Attribution({ ml }) {
   const norm = ml.seasonal_norm;
   return (
     <>
+      <p className="st-caption">Школа в разборе: <b>{norm.school}</b></p>
       <h3>{ml.cause_label}</h3>
       <div className="st-metrics">
         <Metric label="Уверенность модели" value={pct(ml.confidence)}

@@ -38,7 +38,7 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
     setBusy(true);
     try {
       const [s, b, f, m] = await Promise.all([
-        api.mlSummary(), api.mlBoard(40), api.mlForecast(10), api.mlModelInfo(),
+        api.mlSummary(), api.mlBoard(40), api.mlForecast(10), api.mlModelInfo().catch(() => null),
       ]);
       setSummary(s); setBoard(b); setForecast(f); setModel(m); setError('');
     } catch (e) { setError(e.message); } finally { setBusy(false); }

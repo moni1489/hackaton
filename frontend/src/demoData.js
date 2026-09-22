@@ -179,7 +179,9 @@ export default function demoSource(view, sid) {
           current_ping: s.ping, current_jitter: s.jitter, current_packet_loss: s.loss,
           last_measurement: base.last_measurement,
         }],
-        workstations: 3, devices: devicesOf(s, view),
+        workstations: { total: 2, with_fresh_data: 2, degraded: s.affected ? 2 : 0, offline: 0,
+          note: 'Оцениваются отдельно; статус школы определяет основная линия' },
+        devices: devicesOf(s, view),
         incidents: view.incident && s.affected ? [incidentOf(s, view)] : [],
       };
     },
@@ -214,8 +216,11 @@ export default function demoSource(view, sid) {
         patterns: bad ? [{ text: 'Резкая просадка у всех ПК школы одновременно' }] : [],
         risk_score: f && bad ? Math.round(f.probability * 100) : 8,
         risk_level: bad ? (f?.band || 'высокая') : 'низкая',
-        forecast: f && bad ? { probability: f.probability, band: f.band,
-          horizon_hours: f.horizon_hours, recommendation: f.recommendation } : null,
+        // В боевом API это текстовая оценка по истории — её и печатает карточка школы.
+        forecast: f && bad
+          ? `Риск нарушения SLA в ближайшие ${f.horizon_hours} ч — ${Math.round(f.probability * 100)}% `
+            + `(${f.band}). ${f.recommendation}`
+          : null,
         worst_weekday: null, worst_hour: null,
       };
     },
@@ -246,6 +251,17 @@ export default function demoSource(view, sid) {
       freshness: { last_measurement: stamp(view, 2), age_min: 2, stale_after_min: 90,
         is_stale: false, mode: 'live' },
     },
+    // Карточка «Модели» на экране диагностики: версии и метрики из сценария
+    // (в публичном показе боевой /api/ml/model-info закрыт).
+    // Экрану нужно только число классов (он печатает classes.length), сами названия причин
+    // сценарий не отдаёт заранее.
+    mlModelInfo: view.models ? {
+      ...view.models,
+      attribution: { ...view.models.attribution,
+        classes: Array.from({ length: view.models.attribution.classes_count || 0 }) },
+      labels: { total: view.models.attribution.metrics?.samples ?? 0, from_operators: 0,
+        from_simulator: view.models.attribution.metrics?.samples ?? 0 },
+    } : null,
     mlBoard: (limit = 40) => (view.ml ? affected.slice(0, limit).map((s) => verdictOf(s, view)) : []),
     mlForecast: (limit = 12) => (view.ml?.forecast
       ? affected.slice(0, limit).map((s) => forecastOf(s, view)) : []),

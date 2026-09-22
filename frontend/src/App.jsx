@@ -164,7 +164,7 @@ function Dashboard({ user, onLogout }) {
   const openSchool = (id) => { setSelectedId(id); setSchoolDrawer(id); };
 
   return (
-    <div className={`shell ${navCollapsed ? 'nav-min' : ''}`}>
+    <div className={`shell ${navCollapsed ? 'nav-min' : ''} ${demoState ? 'demo-on' : ''}`}>
       {/* ---------- Боковая навигация ---------- */}
       <aside className="sidebar">
         <div className="brand">
@@ -416,9 +416,9 @@ function Dashboard({ user, onLogout }) {
         {view === 'schools' ? <SchoolsPage schools={schools} onOpenSchool={openSchool} /> : null}
         {view === 'rating' ? <RatingPage onOpenSchool={openSchool} /> : null}
         {view === 'public-data' ? <PublicDataPage /> : null}
-        {view === 'devices' ? <DevicesPage onOpenDevice={setDeviceDrawer} /> : null}
+        {view === 'devices' ? <DevicesPage key={demoStamp} onOpenDevice={setDeviceDrawer} /> : null}
         {view === 'diagnostics' ? (
-          <DiagnosticsPage role={user?.role} onOpenSchool={openSchool} />
+          <DiagnosticsPage key={demoStamp} role={user?.role} onOpenSchool={openSchool} />
         ) : null}
         {view === 'incidents' ? (
           <IncidentsPage incidents={incidents} role={user?.role}

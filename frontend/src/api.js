@@ -133,7 +133,7 @@ export const api = {
     () => request(`/api/ml/forecast/${schoolId}`)),
   mlTimeline: (deviceId, hours = 24) =>
     request(`/api/ml/timeline/${encodeURIComponent(deviceId)}?hours=${hours}`),
-  mlModelInfo: () => request('/api/ml/model-info'),
+  mlModelInfo: () => demoOr((d) => d.mlModelInfo, () => request('/api/ml/model-info')),
   mlRetrain: () => request('/api/ml/retrain', { method: 'POST' }),
   slaReport: async (schoolId, filename) => {
     const path = demo ? `/api/demo/sessions/${demo.sid}/report.pdf` : `/api/ai/sla-report/${schoolId}`;
