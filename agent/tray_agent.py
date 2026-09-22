@@ -694,31 +694,53 @@ class TrayApp:
             pystray.MenuItem("✖ Завершить", self._quit),
         )
 
+    def _run_tray_safely(self):
+        try:
+            if self._tray_icon:
+                self._tray_icon.run()
+        except Exception as e:
+            log.warning("Pystray loop завершился или не поддерживается WM: %s", e)
+
     def _start_tray(self):
         if not HAS_TRAY:
             return
         icon_img = make_icon("init")
-        self._tray_icon = pystray.Icon(
-            "vko-agent", icon_img, "САМ ВКО", menu=self._build_tray_menu()
-        )
-        # pystray.run() блокирует → запускаем в отдельном потоке
-        t = threading.Thread(target=self._tray_icon.run, daemon=True)
-        t.start()
+        try:
+            # На Linux X11/Xlib заголовок окна WM_NAME кодируется в latin-1,
+            # поэтому кириллица вызывает UnicodeEncodeError. Для Linux используем ASCII.
+            tray_title = "SAM-VKO Agent" if platform.system() == "Linux" else "САМ ВКО"
+            self._tray_icon = pystray.Icon(
+                "vko-agent", icon_img, tray_title, menu=self._build_tray_menu()
+            )
+            t = threading.Thread(target=self._run_tray_safely, daemon=True)
+            t.start()
+        except Exception as exc:
+            log.warning("Системный трей недоступен в этом окружении (%s). Окно статуса открыто.", exc)
+            self._tray_icon = None
 
     def _update_tray_icon(self, st: dict):
         if not self._tray_icon:
             return
-        if st["offline"]:
-            state = "error"
-        elif st["loss"] > 5 or (st["download"] > 0 and st["download"] < 10):
-            state = "warn"
-        else:
-            state = "ok"
-        self._tray_icon.icon = make_icon(state)
-        self._tray_icon.title = (
-            f"САМ ВКО  ↓{st['download']:.0f} ↑{st['upload']:.0f} "
-            f"ping {st['ping']:.0f}мс  {st['text']}"
-        )
+        try:
+            if st["offline"]:
+                state = "error"
+            elif st["loss"] > 5 or (st["download"] > 0 and st["download"] < 10):
+                state = "warn"
+            else:
+                state = "ok"
+            self._tray_icon.icon = make_icon(state)
+            if platform.system() == "Linux":
+                self._tray_icon.title = (
+                    f"SAM VKO: D:{st['download']:.0f} U:{st['upload']:.0f} "
+                    f"ping:{st['ping']:.0f}ms"
+                )
+            else:
+                self._tray_icon.title = (
+                    f"САМ ВКО  ↓{st['download']:.0f} ↑{st['upload']:.0f} "
+                    f"ping {st['ping']:.0f}мс  {st['text']}"
+                )
+        except Exception:
+            pass
 
     # ── Обработка событий из фонового потока ──────────────────────────────────
 
