@@ -548,3 +548,8 @@ table.grid code { font-family: var(--mono); font-size: 11.5px; background: var(-
   font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
 .form-grid .wide { grid-column: 1 / -1; }
 .check-row { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+
+/* Полоса управления демонстрацией: видна на любом экране, пока идёт сессия. */
+.demo-bar { flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--line); }
+.demo-bar .btn { flex: none; padding: 7px 12px; }
+.demo-bar > span { flex: 1 1 260px; }

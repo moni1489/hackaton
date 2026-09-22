@@ -1,7 +1,7 @@
 /* Вкладка «Демонстрация» в панели оператора: одна кнопка запуска, ссылка с QR-кодом для зала
    и управление сценарием. Доступ — только operator/admin (вкладка скрыта у остальных ролей).
    Все действия идут через API и попадают в журнал аудита; зрители получают изменение с сервера. */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ApiError, request } from './api';
 import { LiveView } from './MlDash';
 import './demo.css';
@@ -31,22 +31,20 @@ async function saveBlob(response, filename) {
 
 const call = (path, method = 'GET', body) => request(`/api/demo${path}`, { method, body });
 
-function Setup({ onCreated, onOpen, sessions, fail }) {
+function Setup({ onCreate, onOpen, sessions }) {
   const [busy, setBusy] = useState(false);
-  const create = async () => {
+  const start = async () => {
     setBusy(true);
-    try {
-      onCreated(await call('/sessions', 'POST',
-        { title: 'Демонстрация САМ ВКО', mode: 'manual', public_url: window.location.origin }));
-    } catch (e) { fail(e); } finally { setBusy(false); }
+    try { await onCreate(); } finally { setBusy(false); }
   };
   return (
     <>
       <section className="dc-card dc-start">
         <h2>Демонстрация для зала</h2>
-        <p className="dc-note">Одна кнопка: сервер посчитает модели, выдаст ссылку и QR-код.
-          На телефонах зрителей откроется ML-дашборд в реальном времени — тот же, что в предпросмотре ниже.</p>
-        <button type="button" className="btn accent" onClick={create} disabled={busy}>
+        <p className="dc-note">Одна кнопка: сервер посчитает модели и выдаст ссылку с QR-кодом.
+          Дальше демонстрация идёт <b>в обычных экранах приложения</b> — карта, карточка школы,
+          диагностика, инциденты, акт; на телефонах зрителей — ML-дашборд по той же школе.</p>
+        <button type="button" className="btn accent" onClick={start} disabled={busy}>
           {busy ? 'Готовим (считаем модели)…' : '▶ Запустить демо'}
         </button>
       </section>
@@ -223,31 +221,33 @@ function LinkPanel({ sid, link, setLink, control, fail }) {
   );
 }
 
-function Panel() {
+/* Состояние сессии живёт в приложении, а не во вкладке: опрос идёт на любом экране,
+   поэтому карта, инциденты и диагностика показывают сценарий, даже когда вкладка закрыта. */
+export function useDemoSession(enabled) {
   const [sid, setSid] = useState(null);
   const [state, setState] = useState(null);
   const [link, setLink] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [error, setError] = useState('');
-  const timer = useRef(null);
 
   const fail = useCallback((e) => {
-    // 401 разбирает сам api.js: он шлёт vko:unauthorized и приложение возвращает на вход.
+    // 401 разбирает api.js: он шлёт vko:unauthorized и приложение возвращает на вход.
     if (!(e instanceof ApiError && e.status === 401)) setError(e.message || 'Ошибка запроса');
   }, []);
 
-  const refreshList = useCallback(() => call('/sessions').then(setSessions).catch(fail), [fail]);
+  const refreshList = useCallback(() => {
+    if (enabled) call('/sessions').then(setSessions).catch(() => setSessions([]));
+  }, [enabled]);
   useEffect(() => { if (!sid) refreshList(); }, [sid, refreshList]);
 
-  // Панель опрашивает состояние: это её «зеркало» того, что видят зрители.
   useEffect(() => {
     if (!sid) return undefined;
     let alive = true;
     const tick = () => call(`/sessions/${sid}`).then((s) => { if (alive) { setState(s); setError(''); } })
       .catch((e) => { if (alive) { if (e.status === 404) { setSid(null); setState(null); } else fail(e); } });
     tick();
-    timer.current = setInterval(tick, 1500);
-    return () => { alive = false; clearInterval(timer.current); };
+    const timer = setInterval(tick, 1500);
+    return () => { alive = false; clearInterval(timer); };
   }, [sid, fail]);
 
   const act = useCallback(async (fn) => {
@@ -255,45 +255,69 @@ function Panel() {
     try { setState(await fn()); } catch (e) { fail(e); }
   }, [fail]);
 
-  const open = async (id) => {
+  const control = useCallback((action, extra) =>
+    act(() => call(`/sessions/${sid}/control`, 'POST', { action, ...extra })), [act, sid]);
+  const decide = useCallback((decision, cause) =>
+    act(() => call(`/sessions/${sid}/verdict`, 'POST', { decision, cause, note: '' })), [act, sid]);
+  const report = useCallback(() => act(() => call(`/sessions/${sid}/report`, 'POST')), [act, sid]);
+
+  const create = useCallback(async () => {
+    try {
+      const data = await call('/sessions', 'POST', { title: 'Демонстрация САМ ВКО',
+        mode: 'manual', public_url: window.location.origin });
+      setLink(data.link);
+      setState(data.state);
+      setSid(data.session_id);
+    } catch (e) { fail(e); }
+  }, [fail]);
+
+  const open = useCallback(async (id) => {
     setSid(id);
     setState(null);
     try { setLink(await call(`/sessions/${id}/link`, 'POST', { public_url: window.location.origin })); } catch (e) { fail(e); }
-  };
-  const close = async () => {
+  }, [fail]);
+
+  const close = useCallback(async () => {
     if (!window.confirm('Закрыть сессию? Ссылки зрителей перестанут работать.')) return;
     try { await call(`/sessions/${sid}`, 'DELETE'); setSid(null); setState(null); setLink(null); } catch (e) { fail(e); }
-  };
+  }, [fail, sid]);
 
+  const leave = useCallback(() => { setSid(null); setState(null); }, []);
+
+  return { sid, state, link, setLink, sessions, error, setError, fail, act,
+           control, decide, report, create, open, close, leave };
+}
+
+/* Полоса управления поверх обычных экранов: ведущий не уходит из приложения. */
+export function DemoBar({ session, onOpenPanel }) {
+  const { state, control, decide, report } = session;
+  if (!state) return null;
+  const { control: c, view } = state;
+  const total = view.stages.length - 1;
+  const step = Math.min(view.stage.index, total - 1) + 1;
   return (
-    <div className="page dc-page">
-      {sid ? (
-        <div className="dc-row">
-          <button type="button" className="btn danger" onClick={close}>Закрыть сессию</button>
-          <button type="button" className="btn" onClick={() => { setSid(null); setState(null); }}>К списку сессий</button>
-        </div>
+    <div className="banner demo demo-bar">
+      <span>
+        <b>ДЕМО · шаг {step} из {total}: {view.stage.label}</b>
+        {c.paused ? ' · пауза' : ''} · зрителей {c.viewers}
+        {c.awaiting_operator ? ' · ждёт вашего решения' : ''}
+      </span>
+      <button className="btn" disabled={!c.can.start} onClick={() => control('start')}>▶ Запуск</button>
+      <button className="btn" disabled={!c.can.next} onClick={() => control('next')}>Следующий шаг →</button>
+      {c.can.decide ? (
+        <button className="btn accent" onClick={() => decide('confirm')}>Подтвердить вердикт</button>
       ) : null}
-      {error ? <div className="dc-err" role="alert">{error}</div> : null}
-        {!sid ? (
-          <Setup sessions={sessions} fail={fail} onOpen={open}
-            onCreated={(data) => { setLink(data.link); setState(data.state); setSid(data.session_id); }} />
-        ) : !state ? <p className="dc-note">Загрузка…</p> : (
-          <div className="dc-cols">
-            <div style={{ display: 'grid', gap: 16 }}>
-              <Controls sid={sid} state={state} act={act} setError={setError} />
-              <LinkPanel sid={sid} link={link} setLink={setLink} control={state.control} fail={fail} />
-            </div>
-            <section aria-label="Предварительный просмотр">
-              <h2 style={{ margin: '0 0 8px' }}>Предпросмотр: ML-дашборд на телефонах зрителей</h2>
-              <div className="dc-preview"><LiveView view={state.view} conn="live" /></div>
-            </section>
-          </div>
-        )}
+      {c.can.report ? <button className="btn accent" onClick={report}>Сформировать акт</button> : null}
+      <button className="btn" onClick={onOpenPanel}>QR и управление</button>
+      <button className="btn" onClick={() => {
+        if (window.confirm('Сбросить демонстрацию в исходное состояние?')) control('reset');
+      }}>↺ Сброс</button>
     </div>
   );
 }
 
-export default function DemoPanel({ role }) {
+/* Вкладка «Демонстрация»: запуск, ссылка с QR, полный набор органов управления. */
+export default function DemoPanel({ role, session }) {
   const [enabled, setEnabled] = useState(null);
   useEffect(() => { request('/api/demo/config').then(() => setEnabled(true)).catch(() => setEnabled(false)); }, []);
 
@@ -314,5 +338,31 @@ export default function DemoPanel({ role }) {
       </section></div>
     );
   }
-  return <Panel />;
+
+  const { sid, state, link, setLink, sessions, error, setError, fail, act, close, leave } = session;
+  return (
+    <div className="page dc-page">
+      {sid ? (
+        <div className="dc-row">
+          <button type="button" className="btn danger" onClick={close}>Закрыть сессию</button>
+          <button type="button" className="btn" onClick={leave}>К списку сессий</button>
+        </div>
+      ) : null}
+      {error ? <div className="dc-err" role="alert">{error}</div> : null}
+      {!sid ? (
+        <Setup sessions={sessions} onCreate={session.create} onOpen={session.open} />
+      ) : !state ? <p className="dc-note">Загрузка…</p> : (
+        <div className="dc-cols">
+          <div style={{ display: 'grid', gap: 16 }}>
+            <Controls sid={sid} state={state} act={act} setError={setError} />
+            <LinkPanel sid={sid} link={link} setLink={setLink} control={state.control} fail={fail} />
+          </div>
+          <section aria-label="Предварительный просмотр">
+            <h2 style={{ margin: '0 0 8px' }}>Предпросмотр: ML-дашборд на телефонах зрителей</h2>
+            <div className="dc-preview"><LiveView view={state.view} conn="live" /></div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
 }
