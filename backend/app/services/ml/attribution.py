@@ -12,6 +12,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from ...config import settings
 from ...models import Incident, School
 from . import baseline
 from .features import (ATTRIBUTION_FEATURES, CAUSE_LABELS, CAUSE_OWNER, Topology,
@@ -149,6 +150,12 @@ def _narrative(cause: str, school: School, ctx: dict, quality: dict, hint: str |
                 f"{worst.get('depth_pct', depth)}% при исправных остальных {total - hit} ПК "
                 f"организации. Проверить сам ПК и его подключение (Wi-Fi, кабель, сетевая карта); "
                 f"признаков проблемы линии провайдера по остальным ПК нет.")
+    if cause == "chronic":
+        return (lead + f"Фактическая скорость — {ctx.get('contract_ratio_pct', 0)}% договорной, "
+                f"и так держится постоянно, поэтому отклонения от собственной нормы канала нет: "
+                f"норма этой организации сама ниже договора. Это не авария, а устойчивое "
+                f"несоответствие услуги договору — повод для претензии к провайдеру "
+                f"{_quoted(school.provider)}, а не для поиска сбоя.")
     if cause == "undetermined":
         why = "; ".join(quality["reasons"]) or "данных недостаточно"
         guess = (f" Предварительная гипотеза модели — {CAUSE_LABELS[hint][0].lower()}"
@@ -215,6 +222,11 @@ def diagnose(db: Session, school_id: int, at: datetime | None = None,
     # Слой достаточности: без сопоставимых школ модель отвечает «школа», потому что
     # отсутствие соседей неотличимо от «соседи здоровы». Такой вывод не выносится.
     quality = assess(cause, ctx)
+    # Ровно плохой канал аномалией не выглядит — отклоняться ему не от чего.
+    # Но недобор договорной скорости это именно нарушение, и вешать на него
+    # «аномалия не подтверждена» значит прятать реальный повод для претензии.
+    if cause == "none" and ctx.get("contract_ratio_pct", 100.0) < settings.SLA_SPEED_RATIO * 100:
+        cause = "chronic"
     model_confidence, hint = confidence, None
     if cause != "none" and quality["level"] == 0:
         hint, cause = cause, "undetermined"
@@ -244,7 +256,8 @@ def diagnose(db: Session, school_id: int, at: datetime | None = None,
         "model_version": version,
         "hypothesis": cause not in ("none",),
         # Основание для претензии — только при достаточных данных и стороне провайдера.
-        "actionable": cause in ("provider_node", "regional") and quality["level"] == 2,
+        "actionable": (cause in ("provider_node", "regional") and quality["level"] == 2)
+                      or cause == "chronic",
     }
 
 

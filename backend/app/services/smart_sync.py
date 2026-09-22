@@ -27,6 +27,7 @@ log = logging.getLogger("smart_sync")
 
 MAX_ATTEMPTS = 5      # после стольких неудач пакет остаётся в БД со статусом failed для разбора
 SWEEP_SEC = 300       # как часто подбирать неудавшиеся и потерянные пакеты
+OPEN_INCIDENT = ["Новый", "В работе", "Передан поставщику"]   # незакрытые состояния
 
 _queue: asyncio.Queue | None = None
 _workers: list[asyncio.Task] = []
@@ -280,6 +281,7 @@ def apply_latest(db, device_id: str, school_id: int, row: dict) -> None:
     if line.role == "main" and school:
         set_state(school, row, status)
         _open_incident(db, school, line, device_id, row, status)
+        _close_incident(db, school, device_id, status)
 
 
 def _open_incident(db, school: School, line: Line, device_id: str, row: dict, status: str) -> None:
@@ -295,10 +297,10 @@ def _open_incident(db, school: School, line: Line, device_id: str, row: dict, st
         return
     if db.query(Incident).filter(
             Incident.school_id == school.id,
-            Incident.status.in_(["Новый", "В работе", "Передан поставщику"])).first():
+            Incident.status.in_(OPEN_INCIDENT)).first():
         return
     number = f"INC-{datetime.utcnow():%Y}-{db.query(Incident).count() + 1:04d}"
-    db.add(Incident(
+    incident = Incident(
         incident_number=number, school_id=school.id, device_id=device_id, line_id=line.id,
         provider=line.provider or school.provider, status="Новый",
         start_time=min(t for t, _ in recent),
@@ -306,4 +308,46 @@ def _open_incident(db, school: School, line: Line, device_id: str, row: dict, st
         description=(f"{need} замера подряд без нормы. Скорость {row['download_speed']} Мбит/с при "
                      f"договорных {line.contract_speed_down} Мбит/с · Ping {row['ping']} мс · "
                      f"Потери {row['packet_loss']}%"),
-    ))
+    )
+    db.add(incident)
+    db.flush()
+    _attribute(db, incident)
+
+
+def _attribute(db, incident: Incident) -> None:
+    """Источник деградации — сразу при открытии инцидента.
+
+    Иначе в ленте у живого инцидента пустой вердикт до тех пор, пока кто-нибудь
+    не откроет его карточку. Сбой атрибуции инцидент не отменяет.
+    """
+    from .ml.attribution import diagnose_incident        # локально: ML тянет модели и БД
+    try:
+        diagnose_incident(db, incident)
+    except Exception:
+        log.exception("Атрибуция инцидента %s не удалась", incident.incident_number)
+
+
+def _close_incident(db, school: School, device_id: str, status: str) -> None:
+    """Канал восстановился — инцидент закрывается сам: N подряд «Норма» на той же точке.
+
+    Симметрично _open_incident. Без этого лента копит инциденты школ, которые давно
+    работают штатно: открытый инцидент перестаёт означать «сейчас сломано». Ручная
+    смена статуса (PATCH /api/web/incidents/{id}) остаётся — закрывается только то,
+    что подтверждено замерами.
+    """
+    if status != STATUS_OK:
+        return
+    stale = db.query(Incident).filter(Incident.school_id == school.id,
+                                      Incident.status.in_(OPEN_INCIDENT)).all()
+    if not stale:
+        return
+    need = thresholds().incident_after
+    recent = (db.query(Measurement.timestamp, Measurement.status)
+              .filter(Measurement.device_id == device_id)
+              .order_by(Measurement.timestamp.desc()).limit(need).all())
+    if len(recent) < need or any(s != STATUS_OK for _, s in recent):
+        return
+    resolved_at = max(t for t, _ in recent)
+    for incident in stale:
+        incident.status = "Устранён"
+        incident.resolved_time = resolved_at

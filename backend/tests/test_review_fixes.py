@@ -252,6 +252,20 @@ class SchoolState(unittest.TestCase):
         ingest(gw("E"), m(0.5, offline=True, down=0, up=0, ping=0, jitter=0, loss=100))
         self.assertEqual(len(incidents()), 1)                     # открытый инцидент не дублируется
 
+    def test_incident_closes_itself_when_channel_recovers(self):
+        def incidents():
+            with database.SessionLocal() as db:
+                return db.query(Incident).filter(Incident.school_id == school_id("F")).all()
+
+        ingest(gw("F"), m(60, **CRIT), m(50, **CRIT), m(40, **CRIT))
+        self.assertEqual([i.status for i in incidents()], ["Новый"])
+        ingest(gw("F"), m(30), m(20))                             # двух норм мало
+        self.assertEqual([i.status for i in incidents()], ["Новый"])
+        ingest(gw("F"), m(10))                                    # третья подряд — канал восстановился
+        closed = incidents()
+        self.assertEqual([i.status for i in closed], ["Устранён"])
+        self.assertEqual(closed[0].resolved_time, NOW - timedelta(minutes=10))
+
 
 class Durability(unittest.TestCase):
     def _device_headers(self, code):

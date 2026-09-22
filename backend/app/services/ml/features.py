@@ -29,6 +29,9 @@ CAUSE_LABELS = {
     "regional": "Магистраль или энергоснабжение района",
     "undetermined": "Источник не определён: данных недостаточно",
     "no_data": "Нет свежих данных",
+    # Не класс модели: канал ровно плохой, отклоняться ему не от чего, поэтому
+    # аномалии нет, а нарушение договора есть. Ставится поверх вердикта «none».
+    "chronic": "Канал стабильно ниже договора",
 }
 
 CAUSE_OWNER = {
@@ -39,6 +42,7 @@ CAUSE_OWNER = {
     "regional": "Провайдер / магистральный оператор",
     "undetermined": "Требуется ручная проверка",
     "no_data": "—",
+    "chronic": "Провайдер · несоответствие договорной скорости",
 }
 
 ATTRIBUTION_FEATURES = [
@@ -184,7 +188,12 @@ def attribution_features(school_id: int, snap: dict, topo: Topology) -> tuple[li
         min(1.0, len(states) / 5.0),
         min(1.0, ctx / 20.0),
     ]
+    # Доля от договорной скорости: аномалия считается от собственной нормы ПК,
+    # а нарушение договора — от договора, и одно без другого картину не даёт.
+    ratios = [s["ratio"] for _, s in states]
     context = {
+        "contract_ratio_pct": round(((gateway or min(states, key=lambda ds: ds[1]["ratio"])[1])
+                                     ["ratio"] if ratios else 0.0) * 100, 1),
         "devices_total": len(states),
         "devices_registered": len(devices),
         "devices_affected": len(affected),

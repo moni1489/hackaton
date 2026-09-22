@@ -12,6 +12,7 @@ export const CAUSE_UI = {
   provider_node: { tag: 'danger', Icon: IcoNodes, short: 'Узел провайдера' },
   school_lan: { tag: 'warn', Icon: IcoRouter, short: 'Уровень школы' },
   device: { tag: 'info', Icon: IcoWifi, short: 'Отдельный ПК' },
+  chronic: { tag: 'danger', Icon: IcoTrend, short: 'Ниже договора' },
   undetermined: { tag: 'off', Icon: IcoShield, short: 'Не определён' },
   no_data: { tag: 'stale', Icon: IcoClock, short: 'Нет данных' },
   none: { tag: 'off', Icon: IcoShield, short: 'Не подтверждено' },

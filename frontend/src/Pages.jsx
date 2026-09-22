@@ -365,6 +365,7 @@ export function IncidentsPage({ incidents, role, onOpenSchool, onReload }) {
                     <Tag kind={incident.severity === 'critical' ? 'danger' : 'warn'}>
                       {incident.status}
                     </Tag>
+                    {incident.has_claim ? <Tag kind="info">претензия</Tag> : null}
                   </td>
                   {canManage ? (
                     <td onClick={(e) => e.stopPropagation()}>

@@ -13,12 +13,17 @@ import {
 
 const LINE_ROLE = { main: 'основная', backup: 'резервная', disabled: 'отключена' };
 
+/* Причины, которые принимает ML API (features.CAUSES). Оператор подтверждает
+   вердикт модели или исправляет его — метка идёт в журнал аварий и дообучение. */
+const VERDICT_CAUSES = ['none', 'device', 'school_lan', 'provider_node', 'regional'];
+
 export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) {
   const [school, setSchool] = useState(null);
   const [measurements, setMeasurements] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [verdict, setVerdict] = useState(null);
   const [prediction, setPrediction] = useState(null);
+  const [operVerdict, setOperVerdict] = useState({ cause: '', note: '', busy: false });
   const [claim, setClaim] = useState(null);
   const [claimBusy, setClaimBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -39,6 +44,17 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
     }).catch((e) => alive && setError(e.message));
     return () => { alive = false; };
   }, [schoolId]);
+
+  const saveVerdict = async (incidentId, cause) => {
+    setOperVerdict((v) => ({ ...v, busy: true }));
+    try {
+      const res = await api.mlVerdict(incidentId, cause);
+      setOperVerdict({ cause, busy: false,
+        note: res.agreement ? 'Вердикт модели подтверждён' : 'Вердикт исправлен — метка учтена' });
+    } catch (e) {
+      setOperVerdict((v) => ({ ...v, busy: false, note: `Не сохранено: ${e.message}` }));
+    }
+  };
 
   const makeClaim = async (incident) => {
     setClaim({ incident, text: '' });
@@ -274,6 +290,44 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                     <div className="v" style={{ fontSize: 12 }}>{verdict.model_version}</div>
                   </div>
                 </div>
+                {(() => {
+                  const incident = school.incidents.find((i) => i.status !== 'Устранён')
+                    || school.incidents[0];
+                  if (!incident || !['admin', 'operator'].includes(role)) return null;
+                  const model = VERDICT_CAUSES.includes(verdict.cause) ? verdict.cause : 'none';
+                  const chosen = operVerdict.cause || model;
+                  return (
+                    <div style={{ marginTop: 14, paddingTop: 12,
+                      borderTop: '1px solid var(--surface-3)' }}>
+                      <div className="eyebrow" style={{ marginBottom: 8 }}>
+                        Вердикт оператора · {incident.incident_number}
+                      </div>
+                      <div className="form-grid" style={{ padding: 0,
+                        gridTemplateColumns: '1fr auto', alignItems: 'end' }}>
+                        <label>Источник
+                          <select value={chosen} disabled={operVerdict.busy}
+                            onChange={(e) => setOperVerdict({ cause: e.target.value,
+                              note: '', busy: false })}>
+                            {VERDICT_CAUSES.map((c) => (
+                              <option key={c} value={c}>{causeUi(c).short}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <button className="btn solid" style={{ padding: '10px 16px' }}
+                          disabled={operVerdict.busy}
+                          onClick={() => saveVerdict(incident.id, chosen)}>
+                          {operVerdict.busy ? 'Сохраняю…'
+                            : chosen === model ? 'Подтвердить' : 'Изменить'}
+                        </button>
+                      </div>
+                      <p className="insight-note">
+                        {operVerdict.note
+                          || 'Метка ложится в журнал аварий и учитывается при следующем '
+                          + 'переобучении модели.'}
+                      </p>
+                    </div>
+                  );
+                })()}
                 {prediction && prediction.probability != null ? (
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 14,
                     paddingTop: 12, borderTop: '1px solid var(--surface-3)' }}>

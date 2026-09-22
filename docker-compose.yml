@@ -4,6 +4,8 @@ services:
     environment:
       DATABASE_URL: sqlite:////app/dbdata/hackathon.db
       DEBUG: "false"
+      # Демо без реальных агентов: держит базу свежей. В бою — false.
+      DEMO_FEED: "true"
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-vko-2026}
       GENAI_TOKEN: ${GENAI_TOKEN:-}
     volumes:
