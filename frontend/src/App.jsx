@@ -190,7 +190,7 @@ function Dashboard({ user, onLogout }) {
               style={fresh?.is_stale ? { background: 'var(--warn)' } : undefined} />
             <span className="eyebrow">
               {!fresh ? 'Загрузка…'
-                : demo ? `Демо истории · ${fmtStamp(fresh.as_of)}`
+                : demo ? `Замер ${fmtStamp(fresh.as_of)}`
                   : fresh.is_stale ? `Замер ${fmtStamp(fresh.last_measurement)}`
                     : `Замер ${fmtAge(fresh.age_min)} назад`}
             </span>
@@ -212,16 +212,6 @@ function Dashboard({ user, onLogout }) {
             {incidents.length ? <i className="pip" /> : null}
           </button>
         </header>
-
-        {demo ? (
-          <div className="banner demo">
-            <span>
-              <b>Режим демонстрации истории.</b> Показано состояние на {fmtStamp(fresh?.as_of)};
-              это не текущие данные.
-            </span>
-            <button className="btn" onClick={toggleDemo}>Выйти из демо</button>
-          </div>
-        ) : null}
 
         {view === 'map' ? (
           <>

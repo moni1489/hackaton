@@ -532,13 +532,6 @@ table.grid code { font-family: var(--mono); font-size: 11.5px; background: var(-
 /* --- Свежесть данных и режим демонстрации истории --- */
 :root { --stale: #8492A6; --stale-soft: #F1F3F7; }
 .tag.stale { background: var(--stale-soft); color: var(--stale); border: 1px dashed #B8C0CC; }
-.banner { display: flex; align-items: center; gap: 14px; padding: 10px 24px; font-size: 12.5px;
-  font-weight: 600; line-height: 1.45; border-bottom: 1px solid var(--line); }
-.banner > span { flex: 1; min-width: 0; }
-.banner b { font-weight: 800; }
-.banner .btn { flex: none; padding: 6px 13px; }
-.banner.stale { background: var(--warn-soft); color: #8A5A0A; }
-.banner.demo { background: var(--accent-soft); color: var(--accent); }
 .sys-state.stale .eyebrow { color: var(--warn); }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; padding: 14px; }
 .form-grid label { display: grid; gap: 5px; font-size: 10.5px; font-weight: 800; color: var(--ink-3);
