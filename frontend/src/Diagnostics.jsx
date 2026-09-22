@@ -61,16 +61,6 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
     <div className="page">
       {error ? <div className="login-error" style={{ marginBottom: 14 }}>{error}</div> : null}
 
-      {stale ? (
-        <div className="banner stale" style={{ borderRadius: 12, marginBottom: 14 }}>
-          <span>
-            <b>Нет свежих данных.</b> Последний замер: {fmtStamp(fr.last_measurement)}
-            {fr.age_min != null ? ` (${fmtAge(fr.age_min)} назад)` : ''}. Пустая доска вердиктов и
-            очередь прогноза означают отсутствие данных, а не отсутствие отклонений.
-          </span>
-        </div>
-      ) : null}
-
       {/* ---------- Предполагаемые источники текущих отклонений ---------- */}
       <div className="kpi-strip" style={{ marginBottom: 14 }}>
         <div className="kpi">
@@ -215,8 +205,7 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
             })}
             {!board.length && !busy
               ? <div className="empty">
-                {stale ? 'Нет свежих данных: вердикты не выносятся.'
-                  : 'Отклонений от сезонной нормы не зафиксировано.'}
+                {'Отклонений от сезонной нормы не зафиксировано.'}
               </div> : null}
           </div>
         </div>
@@ -255,7 +244,7 @@ export default function DiagnosticsPage({ role, onOpenSchool }) {
               ))}
               {!forecast.length && !busy
                 ? <div className="empty">
-                  {stale ? 'Нет свежих данных: прогноз не строится.' : 'Школ с повышенным риском нет.'}
+                  {'Школ с повышенным риском нет.'}
                 </div> : null}
             </div>
           </div>

@@ -155,35 +155,26 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <span className="eyebrow mono">{school.school_id_code}</span>
-              <Tag kind={meta.key}>{school.status}</Tag>
+              <Tag kind={meta.key}>{meta.short}</Tag>
               <Tag kind="off">{school.connection_type}</Tag>
             </div>
             <h2>{school.name}</h2>
             <p>{school.region} · {school.address} · {live
               ? `замер ${fmtAge(school.age_min)} назад`
-              : `нет свежих данных · последний замер ${fmtStamp(school.last_measurement)}`}</p>
+              : `последний замер ${fmtStamp(school.last_measurement)}`}</p>
           </div>
           <button className="close-btn" onClick={onClose}><IcoClose size={17} /></button>
         </div>
 
         <div className="drawer-body">
-          {!live ? (
-            <div className="banner stale" style={{ borderRadius: 10, marginBottom: 14 }}>
-              <span>
-                <b>Нет свежих данных.</b> Последний замер основной линии: {fmtStamp(school.last_measurement)}
-                {school.last_known_status ? `, тогда статус был «${school.last_known_status}»` : ''}.
-                Текущий статус неизвестен.
-              </span>
-            </div>
-          ) : null}
           <div className="metric-row">
             <Metric label="Загрузка" value={live ? school.current_download : '—'} unit={live ? ' Мбит/с' : ''}
-              sub={live ? `${ratio}% от договорной` : 'нет свежего замера'}
+              sub={live ? `${ratio}% от договорной` : ''}
               color={live ? (ratio < 60 ? '#E0453E' : '#17A65B') : undefined} />
             <Metric label="Отдача" value={live ? school.current_upload : '—'} unit={live ? ' Мбит/с' : ''}
               sub={`договор ${school.contract_speed_up} Мбит/с`} />
             <Metric label="Задержка" value={live ? school.current_ping : '—'} unit={live ? ' мс' : ''}
-              sub={live ? `джиттер ${school.current_jitter} мс` : 'нет свежего замера'} />
+              sub={live ? `джиттер ${school.current_jitter} мс` : ''} />
             <Metric label="Потери пакетов" value={live ? school.current_packet_loss : '—'} unit={live ? ' %' : ''}
               sub={`ПК-агентов: ${school.devices.length}`} />
           </div>
@@ -295,7 +286,7 @@ export default function SchoolDrawer({ schoolId, role, onOpenDevice, onClose }) 
                   </div>
                 ) : prediction?.stale ? (
                   <p className="insight-note" style={{ marginTop: 12, marginBottom: 0 }}>
-                    Прогноз не строится: нет свежих замеров основной линии.
+                    Прогноз не строится.
                   </p>
                 ) : null}
               </div>

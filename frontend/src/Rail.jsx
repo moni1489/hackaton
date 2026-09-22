@@ -165,7 +165,7 @@ function Insights({ overview, counts, risks, schools, onOpenSchool }) {
             Состояние сети
           </Tag>
           <div className="insight-title">
-            {noData ? 'Нет свежих данных'
+            {noData ? '—'
               : healthy >= 70 ? 'Стабильное' : healthy >= 45 ? 'Требует внимания' : 'Напряжённое'}
           </div>
           {noData ? null : (

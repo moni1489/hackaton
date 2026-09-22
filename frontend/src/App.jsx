@@ -191,7 +191,7 @@ function Dashboard({ user, onLogout }) {
             <span className="eyebrow">
               {!fresh ? 'Загрузка…'
                 : demo ? `Демо истории · ${fmtStamp(fresh.as_of)}`
-                  : fresh.is_stale ? `Нет свежих данных · замер ${fmtStamp(fresh.last_measurement)}`
+                  : fresh.is_stale ? `Замер ${fmtStamp(fresh.last_measurement)}`
                     : `Замер ${fmtAge(fresh.age_min)} назад`}
             </span>
           </span>
@@ -220,17 +220,6 @@ function Dashboard({ user, onLogout }) {
               это не текущие данные.
             </span>
             <button className="btn" onClick={toggleDemo}>Выйти из демо</button>
-          </div>
-        ) : fresh?.is_stale ? (
-          <div className="banner stale">
-            <span>
-              <b>Нет свежих данных.</b> Последний замер: {fmtStamp(fresh.last_measurement)}
-              {' '}({fmtAge(fresh.age_min)} назад). Статусы школ не подтверждены; пустые списки и
-              графики не означают, что связь в норме.
-            </span>
-            <button className="btn" onClick={toggleDemo} disabled={!fresh.last_measurement}>
-              Показать историю (демо)
-            </button>
           </div>
         ) : null}
 
@@ -326,7 +315,7 @@ function Dashboard({ user, onLogout }) {
                 badge={withData > 0 ? { text: `↑ ${overview?.avg_upload ?? 0}`, kind: 'up' }
                   : { text: 'нет данных', kind: 'flat' }} />
               <Kpi label="Задержка" value={val(overview?.avg_ping) ?? '—'} unit="мс"
-                sub={withData > 0 ? `потери ${overview?.avg_loss ?? 0}%` : 'нет свежих замеров'}
+                sub={withData > 0 ? `потери ${overview?.avg_loss ?? 0}%` : ''}
                 spark={sparks.ping} sparkColor="#D9730D"
                 badge={withData <= 0 ? { text: 'нет данных', kind: 'flat' }
                   : { text: (overview?.avg_ping ?? 0) <= 100 ? 'в норме' : 'выше порога',
@@ -347,7 +336,7 @@ function Dashboard({ user, onLogout }) {
                     {Object.entries(STATUS).map(([label, meta]) => (
                       <div className="legend-row" key={label}>
                         <span className="legend-dot" style={{ background: meta.color }} />
-                        {label}
+                        {meta.short}
                       </div>
                     ))}
                   </div>

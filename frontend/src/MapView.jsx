@@ -106,7 +106,7 @@ export default function MapView({ schools, mode, onOpenSchool, onSelect, selecte
       node.innerHTML = `
         <div class="map-pop-code">
           <span class="mono" style="font-size:11px;color:#8B95AB;font-weight:700">${props.code}</span>
-          <span class="tag ${meta.key}">${props.status}</span>
+          <span class="tag ${meta.key}">${meta.short}</span>
         </div>
         <div class="map-pop-name">${props.name}</div>
         <div class="map-pop-grid">

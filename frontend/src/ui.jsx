@@ -13,7 +13,7 @@ export const DEVICE_STATUS = {
   online: { label: 'В сети', cls: 'ok', color: '#17A65B' },
   warning: { label: 'Отклонения', cls: 'warn', color: '#E4962A' },
   offline: { label: 'Не в сети', cls: 'off', color: '#64748B' },
-  stale: { label: 'Нет свежих данных', cls: 'stale', color: '#9AA5B5' },
+  stale: { label: 'Нет данных', cls: 'stale', color: '#9AA5B5' },
 };
 export const deviceMeta = (status) => DEVICE_STATUS[status] || DEVICE_STATUS.offline;
 
@@ -75,7 +75,7 @@ export const StatusCell = ({ status }) => {
   const meta = statusMeta(status);
   return (
     <span className="status-cell">
-      <i className="dot" style={{ background: meta.color }} />{status}
+      <i className="dot" style={{ background: meta.color }} />{meta.short}
     </span>
   );
 };
