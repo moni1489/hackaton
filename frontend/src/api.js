@@ -3,8 +3,6 @@
 // Пустая VITE_API_URL= — тот же адрес, что у страницы (демо-сборка, которую раздаёт сам бэкенд).
 export const API_URL = import.meta.env.VITE_API_URL ?? 'https://codemasters1.onrender.com';
 
-import demoSource from './demoData';
-
 const TOKEN_KEY = 'vko.token';
 const USER_KEY = 'vko.user';
 
@@ -60,17 +58,6 @@ async function saveBlob(response, filename) {
   URL.revokeObjectURL(url);
 }
 
-/* --- Демонстрация ----------------------------------------------------------------------
-   Пока идёт демо-сессия, экраны приложения читают сценарий, а не БД: подмена в одной точке,
-   компоненты не меняются. Всё, что не перечислено ниже, по-прежнему ходит в боевой API. */
-let demo = null;
-export const setDemoView = (view, sid) => { demo = view ? demoSource(view, sid) : null; };
-export const demoActive = () => Boolean(demo);
-const demoOr = (pick, live) => {
-  if (!demo) return live();
-  try { return Promise.resolve(pick(demo)); } catch (e) { return Promise.reject(e); }
-};
-
 export const api = {
   publicSchools: () => request('/api/public-data/schools?limit=500'),
   publicConnections: () => request('/api/public-data/connections'),
@@ -84,23 +71,20 @@ export const api = {
     }));
     return data;
   },
-  overview: () => demoOr((d) => d.overview, () => request('/api/web/overview')),
-  schools: (params = {}) => demoOr((d) => d.schools(params),
-    () => request(`/api/web/schools?${new URLSearchParams(
-      Object.entries(params).filter(([, v]) => v && !String(v).startsWith('Все')))}`)),
-  school: (id) => demoOr((d) => d.school(id), () => request(`/api/web/schools/${id}`)),
-  schoolMeasurements: (id) => demoOr((d) => d.schoolMeasurements(id),
-    () => request(`/api/web/schools/${id}/measurements`)),
-  schoolAnalytics: (id) => demoOr((d) => d.schoolAnalytics(id),
-    () => request(`/api/web/schools/${id}/analytics`)),
-  devices: (params = {}) => demoOr((d) => d.devices(), () => request(`/api/web/devices?${new URLSearchParams(
-    Object.entries(params).filter(([, v]) => v))}`)),
+  overview: () => request('/api/web/overview'),
+  schools: (params = {}) => request(`/api/web/schools?${new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v && !String(v).startsWith('Все')))}`),
+  school: (id) => request(`/api/web/schools/${id}`),
+  schoolMeasurements: (id) => request(`/api/web/schools/${id}/measurements`),
+  schoolAnalytics: (id) => request(`/api/web/schools/${id}/analytics`),
+  devices: (params = {}) => request(`/api/web/devices?${new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v))}`),
   device: (deviceId) => request(`/api/web/devices/${encodeURIComponent(deviceId)}`),
-  incidents: () => demoOr((d) => d.incidents, () => request('/api/web/incidents')),
+  incidents: () => request('/api/web/incidents'),
   updateIncident: (id, status) =>
     request(`/api/web/incidents/${id}?new_status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
-  riskQueue: (limit = 6) => demoOr((d) => d.riskQueue(limit), () => request(`/api/web/risk-queue?limit=${limit}`)),
-  trend: (hours = 24) => demoOr((d) => d.trend, () => request(`/api/web/trend?hours=${hours}`)),
+  riskQueue: (limit = 6) => request(`/api/web/risk-queue?limit=${limit}`),
+  trend: (hours = 24) => request(`/api/web/trend?hours=${hours}`),
   rating: (days = 30) => request(`/api/web/rating?days=${days}`),
   ratingHistory: (days = 90, schoolId) =>
     request(`/api/web/rating/history?days=${days}${schoolId ? `&school_id=${schoolId}` : ''}`),
@@ -113,31 +97,23 @@ export const api = {
   setDiagnosticMode: (deviceId, mode) =>
     request(`/api/admin/devices/${encodeURIComponent(deviceId)}/diagnostic-mode?mode=${mode}`,
       { method: 'POST' }),
-  // В демо претензия и акт берутся из сценария той же сессии, а не из боевой БД.
-  generateClaim: (incidentId) => demoOr(
-    (d) => (d.claim ? d.claim : request(`/api/demo/sessions/${d.sid}/report`, { method: 'POST' })
-      .then((s) => ({ claim_text: s.view.report?.claim_text || '', source: 'шаблон',
-        claim_advised: true, advisory: 'Демонстрационный документ на синтетических данных.' }))),
-    () => request(`/api/ai/claim/${incidentId}`, { method: 'POST' })),
+  generateClaim: (incidentId) => request(`/api/ai/claim/${incidentId}`, { method: 'POST' }),
 
   // --- ML: атрибуция причины и прогноз пробоя SLA ---
-  mlBoard: (limit = 40) => demoOr((d) => d.mlBoard(limit), () => request(`/api/ml/board?limit=${limit}`)),
-  mlSummary: () => demoOr((d) => d.mlSummary, () => request('/api/ml/summary')),
-  mlAttribution: (schoolId) => demoOr((d) => d.mlAttribution(schoolId),
-    () => request(`/api/ml/attribution/${schoolId}`)),
+  mlBoard: (limit = 40) => request(`/api/ml/board?limit=${limit}`),
+  mlSummary: () => request('/api/ml/summary'),
+  mlAttribution: (schoolId) => request(`/api/ml/attribution/${schoolId}`),
   mlIncident: (incidentId) => request(`/api/ml/incident/${incidentId}`),
   mlVerdict: (incidentId, cause) =>
     request(`/api/ml/verdict/${incidentId}?cause=${encodeURIComponent(cause)}`, { method: 'POST' }),
-  mlForecast: (limit = 12) => demoOr((d) => d.mlForecast(limit), () => request(`/api/ml/forecast?limit=${limit}`)),
-  mlSchoolForecast: (schoolId) => demoOr((d) => d.mlSchoolForecast(schoolId),
-    () => request(`/api/ml/forecast/${schoolId}`)),
+  mlForecast: (limit = 12) => request(`/api/ml/forecast?limit=${limit}`),
+  mlSchoolForecast: (schoolId) => request(`/api/ml/forecast/${schoolId}`),
   mlTimeline: (deviceId, hours = 24) =>
     request(`/api/ml/timeline/${encodeURIComponent(deviceId)}?hours=${hours}`),
-  mlModelInfo: () => demoOr((d) => d.mlModelInfo, () => request('/api/ml/model-info')),
+  mlModelInfo: () => request('/api/ml/model-info'),
   mlRetrain: () => request('/api/ml/retrain', { method: 'POST' }),
   slaReport: async (schoolId, filename) => {
-    const path = demo ? `/api/demo/sessions/${demo.sid}/report.pdf` : `/api/ai/sla-report/${schoolId}`;
-    await saveBlob(await request(path, { raw: true }), filename);
+    await saveBlob(await request(`/api/ai/sla-report/${schoolId}`, { raw: true }), filename);
   },
 
   // --- Экспорт (ТЗ п.9), пороги и линии ---

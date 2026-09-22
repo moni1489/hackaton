@@ -1,11 +1,10 @@
 /* Оболочка панели: карта области, карточка школы и ПК-уровень прослеживания. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, clearSession, getToken, getUser, setAsOf, setDemoView } from './api';
+import { api, clearSession, getToken, getUser, setAsOf } from './api';
 import { Spark } from './Charts';
 import DeviceDrawer from './DeviceDrawer';
 import Login from './Login';
 import MapView from './MapView';
-import DemoPanel, { DemoBar, useDemoSession } from './DemoControl';
 import DiagnosticsPage from './Diagnostics';
 import PublicDataPage from './PublicData';
 import RatingPage from './Rating';
@@ -27,24 +26,13 @@ const NAV = [
   { key: 'public-data', label: 'Открытые данные', Icon: IcoLayers },
   { key: 'incidents', label: 'Инциденты', Icon: IcoAlert },
   { key: 'admin', label: 'Управление', Icon: IcoGear },
-  { key: 'demo', label: 'Демонстрация', Icon: IcoPulse },
 ];
-const OPERATOR_ONLY = ['admin', 'demo'];
-
-/* Демонстрация идёт в обычных экранах: этап сценария сам открывает нужный экран,
-   а на этапе аварии и на этапе акта — ещё и карточку школы-героя. */
-const STAGE_SCREEN = {
-  waiting: 'demo', normal: 'map', incident_started: 'map', diagnostics: 'diagnostics',
-  ml_result: 'diagnostics', operator_review: 'diagnostics', operator_confirmed: 'incidents',
-  report_ready: 'incidents', reset: 'demo',
-};
-const STAGE_OPENS_SCHOOL = ['incident_started', 'report_ready'];
+const OPERATOR_ONLY = ['admin'];
 
 const TITLES = {
   'public-data': 'Открытые данные и внешняя проверка',
   map: 'Мониторинг', schools: 'Школы', rating: 'Рейтинг организаций', devices: 'ПК-агенты',
   diagnostics: 'Диагностика · кто виноват', incidents: 'Инциденты', admin: 'Управление',
-  demo: 'Демонстрация для зала',
 };
 
 const ROLE_LABEL = {
@@ -69,8 +57,7 @@ export default function App() {
 }
 
 function Dashboard({ user, onLogout }) {
-  // /demo открывает то же приложение сразу на вкладке демонстрации.
-  const [view, setView] = useState(() => (window.location.pathname === '/demo' ? 'demo' : 'map'));
+  const [view, setView] = useState('map');
   const [overview, setOverview] = useState(null);
   const [schools, setSchools] = useState([]);
   const [incidents, setIncidents] = useState([]);
@@ -91,21 +78,6 @@ function Dashboard({ user, onLogout }) {
   const [deviceDrawer, setDeviceDrawer] = useState(null);
   const searchRef = useRef(null);
 
-  const canDemo = ['admin', 'operator'].includes(user?.role);
-  const demoSession = useDemoSession(canDemo);
-  const demoState = demoSession.state;
-  const demoStamp = demoState ? `${demoSession.sid}:${demoState.view.session.version}` : '';
-  const demoStage = demoState?.view.stage.key || null;
-  // Школа-герой сценария: её карточку открывает демонстрация.
-  const demoHeroId = useMemo(() => {
-    const view = demoState?.view;
-    if (!view) return null;
-    const byName = view.ml && view.schools.find((s) => s.name === view.ml.seasonal_norm.school);
-    return byName?.id ?? view.incident?.affected?.[0] ?? null;
-  }, [demoState]);
-  // Подмену данных ставим синхронно при рендере: экраны не успеют сходить в боевой API.
-  if (canDemo) setDemoView(demoState ? demoState.view : null, demoSession.sid);
-
   const loadCore = useCallback(async () => {
     const [ov, inc, tr] = await Promise.all([
       api.overview().catch(() => null),
@@ -115,19 +87,11 @@ function Dashboard({ user, onLogout }) {
     setOverview(ov); setIncidents(inc); setTrend(tr);
   }, []);
 
-  useEffect(() => { loadCore(); }, [loadCore, demo, demoStamp]);
+  useEffect(() => { loadCore(); }, [loadCore, demo]);
 
   useEffect(() => {
     api.schools({ region, provider, status, search }).then(setSchools).catch(() => setSchools([]));
-  }, [region, provider, status, search, demo, demoStamp]);
-
-  // Смена этапа сценария переключает экран приложения — ведущему не нужно ничего искать.
-  useEffect(() => {
-    if (!demoStage) return;
-    const screen = STAGE_SCREEN[demoStage];
-    if (screen) setView(screen);
-    setSchoolDrawer(STAGE_OPENS_SCHOOL.includes(demoStage) ? demoHeroId : null);
-  }, [demoStage, demoHeroId]);
+  }, [region, provider, status, search, demo]);
 
   // ⌘K / Ctrl+K — фокус в поиск
   useEffect(() => {
@@ -164,7 +128,7 @@ function Dashboard({ user, onLogout }) {
   const openSchool = (id) => { setSelectedId(id); setSchoolDrawer(id); };
 
   return (
-    <div className={`shell ${navCollapsed ? 'nav-min' : ''} ${demoState ? 'demo-on' : ''}`}>
+    <div className={`shell ${navCollapsed ? 'nav-min' : ''}`}>
       {/* ---------- Боковая навигация ---------- */}
       <aside className="sidebar">
         <div className="brand">
@@ -237,13 +201,6 @@ function Dashboard({ user, onLogout }) {
             <IcoClock size={15} />Демо истории
           </button>
 
-          {['admin', 'operator'].includes(user?.role) ? (
-            <button className="btn accent" style={{ flex: 'none' }} onClick={() => setView('demo')}
-              title="Создать сессию, показать QR-код залу и вести сценарий">
-              ▶ Демо для зала
-            </button>
-          ) : null}
-
           <div className="search">
             <IcoSearch size={15} style={{ color: 'var(--ink-3)' }} />
             <input ref={searchRef} placeholder="Поиск школы или кода…" value={search}
@@ -255,8 +212,6 @@ function Dashboard({ user, onLogout }) {
             {incidents.length ? <i className="pip" /> : null}
           </button>
         </header>
-
-        <DemoBar session={demoSession} onOpenPanel={() => setView('demo')} />
 
         {demo ? (
           <div className="banner demo">
@@ -416,20 +371,19 @@ function Dashboard({ user, onLogout }) {
         {view === 'schools' ? <SchoolsPage schools={schools} onOpenSchool={openSchool} /> : null}
         {view === 'rating' ? <RatingPage onOpenSchool={openSchool} /> : null}
         {view === 'public-data' ? <PublicDataPage /> : null}
-        {view === 'devices' ? <DevicesPage key={demoStamp} onOpenDevice={setDeviceDrawer} /> : null}
+        {view === 'devices' ? <DevicesPage onOpenDevice={setDeviceDrawer} /> : null}
         {view === 'diagnostics' ? (
-          <DiagnosticsPage key={demoStamp} role={user?.role} onOpenSchool={openSchool} />
+          <DiagnosticsPage role={user?.role} onOpenSchool={openSchool} />
         ) : null}
         {view === 'incidents' ? (
           <IncidentsPage incidents={incidents} role={user?.role}
             onOpenSchool={openSchool} onReload={loadCore} />
         ) : null}
         {view === 'admin' ? <AdminPage role={user?.role} /> : null}
-        {view === 'demo' ? <DemoPanel role={user?.role} session={demoSession} /> : null}
       </div>
 
       {schoolDrawer ? (
-        <SchoolDrawer key={`${demo ? 'history' : 'live'}:${demoStamp}`} schoolId={schoolDrawer} role={user?.role}
+        <SchoolDrawer key={demo ? 'history' : 'live'} schoolId={schoolDrawer} role={user?.role}
           onOpenDevice={(id) => { setSchoolDrawer(null); setDeviceDrawer(id); }}
           onClose={() => setSchoolDrawer(null)} />
       ) : null}

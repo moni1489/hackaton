@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from ..cache import rate_limit_ok
 from ..config import settings
 from ..database import get_db
 from ..models import User
@@ -17,12 +16,6 @@ router = APIRouter(prefix="/api/auth", tags=["Auth API"])
 
 @router.post("/login", response_model=TokenResponse, summary="Вход в веб-панель")
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    if settings.DEMO_MODE and not rate_limit_ok(
-            f"login:{request.client.host if request.client else ''}", settings.DEMO_LOGIN_RATE_LIMIT):
-        # Во время показа адрес сервера знает зал: перебор паролей ограничиваем.
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
-                            "Слишком много попыток входа — подождите минуту",
-                            headers={"Retry-After": "60"})
     user = db.query(User).filter(User.email == payload.email.lower().strip()).first()
     if not user or not user.is_active or not verify_password(payload.password, user.password_hash):
         write_audit(db, payload.email, "anonymous", "login.failed", "",
@@ -78,10 +71,3 @@ def policy():
         "data_minimization": "персональные данные учащихся не собираются; "
                              "хранятся только сетевые метрики и служебные контакты",
     }
-
-
-# Публичный демо-режим (DEMO_PUBLIC): наружу — только вход и профиль, без журнала аудита и политик.
-public_router = APIRouter(prefix="/api/auth", tags=["Auth API"])
-public_router.add_api_route("/login", login, methods=["POST"], response_model=TokenResponse,
-                            summary="Вход в веб-панель")
-public_router.add_api_route("/me", me, methods=["GET"], summary="Текущий профиль и область видимости")

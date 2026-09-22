@@ -50,7 +50,7 @@ def profiles_from_rows(rows, contracts: dict[int, float]) -> dict[str, dict]:
     """Профили ПК по строкам (device_id, school_id, timestamp, download, offline).
 
     Чистая функция: ничего не читает и не пишет — на ней строится и боевой build(),
-    и воспроизводимый демонстрационный сценарий (services/demo)."""
+    и повторяемость результатов."""
     per_device: dict[str, dict[int, list[float]]] = {}
     for device_id, school_id, ts, download, offline in rows:
         if not ts or offline or device_id is None:

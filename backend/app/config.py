@@ -63,23 +63,6 @@ class Settings(BaseSettings):
     GENAI_TOKEN: str = ""
     GENAI_MODEL: str = "gemini-1.5-pro"
 
-    # --- Демонстрационный режим (презентация) -----------------------------
-    # По умолчанию выключен: маршруты /api/demo/*, страница /live/... и панель ведущего
-    # в обычном режиме не существуют. Подробности — docs/demo/.
-    DEMO_MODE: bool = False
-    DEMO_PUBLIC: bool = False           # публичный показ: наружу — только демо-API и вход оператора
-    DEMO_PUBLIC_URL: str = ""           # адрес для QR-кода, напр. http://192.168.1.20:8000
-    DEMO_OPERATOR_EMAIL: str = "demo.operator@example.local"   # см. `python demo.py prepare`
-    DEMO_OPERATOR_PASSWORD: str = ""    # пусто — prepare сгенерирует и запишет в .env
-    DEMO_VIEWER_TTL_MIN: int = 240      # срок действия ссылки зрителя
-    DEMO_SESSION_TTL_MIN: int = 480     # сессия живёт столько после последнего изменения
-    DEMO_MAX_SESSIONS: int = 20
-    DEMO_MAX_VIEWERS: int = 500         # одновременных потоков на процесс
-    DEMO_RATE_LIMIT_VIEWER: int = 120   # запросов/мин с одного зрителя
-    DEMO_RATE_LIMIT_SESSION: int = 6000  # запросов/мин от всех зрителей сессии
-    DEMO_RATE_LIMIT_OPERATOR: int = 120  # запросов/мин с учётной записи ведущего
-    DEMO_LOGIN_RATE_LIMIT: int = 20     # попыток входа/мин с одного IP (только при DEMO_MODE)
-
     # Независимые источники: публичные измерения, без создания платных тестов.
     EXTERNAL_POLL_ENABLED: bool = True
     EXTERNAL_REFRESH_SEC: int = 900
