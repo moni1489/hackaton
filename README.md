@@ -217,6 +217,21 @@ accuracy 0.981 и macro-F1 0.981, прогноз — 0.87 и 0.856. Высоки
 
 ## 4. Запуск системы
 
+### Docker (одна команда)
+
+```bash
+docker compose up -d --build       # UI http://localhost:5173, API http://localhost:8000/docs
+```
+
+Демо-БД (`backend/hackathon.db`) едет в образе и при первом старте копируется в том `db`,
+поэтому данные переживают пересоздание контейнеров. Пересидировать: `docker compose exec backend python bootstrap.py`.
+Полный сброс: `docker compose down -v`.
+
+Адрес API вшивается в сборку фронтенда. Если открываете не с localhost:
+`VITE_API_URL=http://<хост>:8000 docker compose up -d --build`.
+
+### Вручную
+
 ```bash
 # 1. Backend
 cd backend
